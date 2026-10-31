@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import {
   LayoutDashboard,
   Fuel,
@@ -51,13 +52,14 @@ const nav = [
 ];
 function Logo() {
   return (
-    <svg width="35" height="39" viewBox="0 0 35 39" aria-hidden="true">
-      <path
-        d="M4 34L13 9Q15 3 22 3H34L30 12H22L19 19H29L25 27H16L13 35Z"
-        fill="#00d1a7"
-      />
-      <path d="M0 35L11 7Q13 2 17 0L5 35Z" fill="#3b82f6" />
-    </svg>
+    <Image
+      src="/brand/symbol-color.svg"
+      width={350}
+      height={265}
+      alt=""
+      aria-hidden="true"
+      className="brand-symbol"
+    />
   );
 }
 export default function Dashboard() {
@@ -112,12 +114,14 @@ export default function Dashboard() {
           className="brand"
           onClick={() => navigate("dashboard")}
         >
-          <Logo />
-          <div>
-            <strong>
-              cruze<span>FuelSense</span>
-            </strong>
-          </div>
+          <Image
+            src="/brand/logo-horizontal-color.svg"
+            width={720}
+            height={200}
+            alt="Cruze FuelSense"
+            className="brand-lockup"
+            priority
+          />
         </a>
         <button
           className="mobile-close icon-button"
@@ -176,8 +180,8 @@ export default function Dashboard() {
             >
               <Menu />
             </button>
-            <div className="truck-icon">
-              <Truck size={20} />
+            <div className="truck-icon" aria-hidden="true">
+              <Logo />
             </div>
             <div>
               <strong>{vehicle.name}</strong>

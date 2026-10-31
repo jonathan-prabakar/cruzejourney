@@ -1,0 +1,15 @@
+:root {
+  --color-primary: #00D1A7;
+  --color-secondary: #3B82F6;
+  --color-accent: #8B5CF6;
+  --color-warning: #F59E0B;
+  --color-critical: #EF4444;
+  --color-background: #0A0F1C;
+  --color-surface: #1A2233;
+  --color-text-secondary: #94A3B8;
+  --color-text-primary: #F8FAFC;
+  --color-border: #2B3648;
+  --gradient-primary: linear-gradient(135deg, #00D1A7, #3B82F6);
+  --gradient-intelligence: linear-gradient(135deg, #3B82F6, #8B5CF6);
+  --gradient-surface: linear-gradient(135deg, #0A0F1C, #1A2233);
+}

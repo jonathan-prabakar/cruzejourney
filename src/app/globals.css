@@ -1,18 +1,19 @@
 @import "tailwindcss";
+@import "../styles/brand-tokens.css";
 :root {
-  --teal: #00d1a7;
-  --blue: #3b82f6;
-  --purple: #8b5cf6;
-  --amber: #f59e0b;
-  --red: #ef4444;
-  --bg: #0a0f1c;
-  --surface: #1a2233;
-  --secondary: #94a3b8;
-  --text: #f8fafc;
-  --border: #2b3648;
-  --primary-gradient: linear-gradient(135deg, #00d1a7, #3b82f6);
-  --intelligence-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
-  --surface-gradient: linear-gradient(135deg, #0a0f1c, #1a2233);
+  --teal: var(--color-primary);
+  --blue: var(--color-secondary);
+  --purple: var(--color-accent);
+  --amber: var(--color-warning);
+  --red: var(--color-critical);
+  --bg: var(--color-background);
+  --surface: var(--color-surface);
+  --secondary: var(--color-text-secondary);
+  --text: var(--color-text-primary);
+  --border: var(--color-border);
+  --primary-gradient: var(--gradient-primary);
+  --intelligence-gradient: var(--gradient-intelligence);
+  --surface-gradient: var(--gradient-surface);
 }
 * {
   box-sizing: border-box;
@@ -133,7 +134,7 @@ section {
   position: fixed;
   inset: 0 auto 0 0;
   border-right: 1px solid #1f293b;
-  background: #0d1422;
+  background: var(--surface-gradient);
   display: flex;
   flex-direction: column;
   padding: 32px 18px;
@@ -145,19 +146,17 @@ section {
   align-items: center;
   padding: 0 8px 36px;
 }
-.brand strong {
+.brand-lockup {
   display: block;
-  font-size: 24px;
-  line-height: 1.05;
-  letter-spacing: -0.04em;
+  width: 100%;
+  height: auto;
+  max-width: 180px;
 }
-.brand strong span {
+.brand-symbol {
   display: block;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  font-weight: 500;
-  color: var(--secondary);
-  margin-top: 6px;
+  width: 34px;
+  height: auto;
+  flex-shrink: 0;
 }
 .sidebar-label {
   font-size: 9px;
@@ -254,8 +253,7 @@ section {
   place-items: center;
   width: 38px;
   height: 38px;
-  border: 1px solid var(--border);
-  border-radius: 9px;
+  border: 0;
   color: var(--secondary);
 }
 .header-vehicle strong {
@@ -1219,9 +1217,9 @@ footer > span {
   align-items: center;
   gap: 8px;
 }
-footer svg {
-  width: 15px;
-  height: 18px;
+footer .brand-symbol {
+  width: 20px;
+  height: auto;
 }
 footer > span > span {
   margin-left: 10px;
@@ -1490,7 +1488,11 @@ footer > span > span {
     padding: 0 16px;
   }
   .truck-icon {
-    display: none;
+    width: 28px;
+    height: 28px;
+  }
+  .truck-icon .brand-symbol {
+    width: 25px;
   }
   .header-vehicle {
     gap: 6px;

@@ -33,3 +33,7 @@ User-provided milestone brief. Repository initially contained only README.md; no
 ## Accessibility & Inclusion
 
 Keyboard controls, visible focus, responsive layouts, reduced motion, readable contrast.
+
+## Added reference material
+
+`docs/Cruze_FuelSense_Hackathon_Plan.md` is supplied planning documentation, not authorization to implement future features in the UI-only asset task. Supplied logo, icon, token and brand-board assets now inform presentation; their origin is recorded in `docs/BRAND_ASSETS.md`. Existing functional scope is unchanged.
