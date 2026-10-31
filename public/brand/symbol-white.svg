@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="350"
+   height="265"
+   viewBox="0 0 350 265"
+   role="img"
+   aria-label="Cruze - Journey"
+   version="1.1"
+   id="svg24"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs14">
+    <linearGradient
+       id="a"
+       x2="1"
+       y2="0.4">
+      <stop
+         stop-color="#00D1A7"
+         id="stop2" />
+      <stop
+         offset="1"
+         stop-color="#008BFF"
+         id="stop4" />
+    </linearGradient>
+    <linearGradient
+       id="b">
+      <stop
+         stop-color="#00D1A7"
+         id="stop7" />
+      <stop
+         offset=".55"
+         stop-color="#008BFF"
+         id="stop9" />
+      <stop
+         offset="1"
+         stop-color="#8B5CF6"
+         id="stop11" />
+    </linearGradient>
+  </defs>
+  <path
+     fill="#FFFFFF"
+     d="M20 240 67 91Q85 28 146 28H330L308 61Q291 82 260 82H160Q102 82 69 132Z"
+     id="path16" />
+  <path
+     fill="#FFFFFF"
+     d="M123 240 148 172Q166 128 214 115H298L283 141Q271 160 244 160H220Q193 160 183 187L166 240Z"
+     id="path18" />
+  <path
+     fill="#FFFFFF"
+     d="M36 240Q93 127 223 111 123 126 63 240Z"
+     id="path20" />
+  <path
+     d="M88 240Q123 155 204 125"
+     fill="none"
+     stroke="#FFFFFF"
+     stroke-width="7"
+     stroke-dasharray="21 14"
+     id="path22" />
+</svg>

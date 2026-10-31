@@ -113,7 +113,7 @@ export class JourneySimulation implements JourneySimulationPort {
     this.frames = generateSimulationFrames(plan, scenario, seed);
     const result = provider.loadDataset({
       metadata: {
-        name: 'Synthetic route-aware journey simulation', source: 'FuelSense journey simulation; cached OSRM base geometry',
+        name: 'Synthetic route-aware journey simulation', source: 'Cruze - Journey simulation; cached OSRM base geometry',
         synthetic: true, route: plan.route.origin.name + ' to ' + plan.route.destination.name,
         limitations: ['Synthetic telemetry; fictional stations, access loops, prices and diagnostic events.', '60 simulated seconds per real second at playback 1×. Interval-average speed readings.'],
         vehicle: { name: JOURNEY_VEHICLE.name, tank_capacity_gallons: JOURNEY_VEHICLE.tank_capacity_gallons, typical_mpg: JOURNEY_VEHICLE.typical_mpg },

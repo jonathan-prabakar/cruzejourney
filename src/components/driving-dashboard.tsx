@@ -59,7 +59,7 @@ export default function DrivingDashboard() {
   const event = frame.phase==='fuel-stop'?'Refueling · engine off · +'+frame.fuelAddedGallons.toFixed(1)+' gal'
     :frame.phase==='arrived'?'Arrived':playing?'Driving':playback.index?'Paused · last reading retained':'Ready to drive';
   return <div className="drive-shell" data-playback-ready="true">
-    <header className="drive-header"><Image src="/brand/logo-horizontal-color.svg" width={720} height={200} alt="Cruze Journey" priority/><span className="drive-product">JOURNEY <span>/</span> INTELLIGENT DRIVE</span><span className="drive-demo"><i/> Demo Mode</span><button aria-label="Developer diagnostics" onClick={()=>setDeveloper(v=>!v)}><Settings2 size={17}/></button></header>
+    <header className="drive-header"><Image src="/brand/logo-horizontal-color.svg?v=journey-20261031" width={720} height={200} alt="Cruze - Journey" priority/><span className="drive-product">JOURNEY <span>/</span> INTELLIGENT DRIVE</span><span className="drive-demo"><i/> Demo Mode</span><button aria-label="Developer diagnostics" onClick={()=>setDeveloper(v=>!v)}><Settings2 size={17}/></button></header>
     <main className="drive-main">
       <form className="drive-destination" aria-label="Drive destination" onSubmit={e=>{e.preventDefault();startDrive();}}>
         <LocationField label="Point A" value={origin} onChange={setOrigin}/>
