@@ -1,7 +1,8 @@
+import { getDemoFuelStations } from './station-fixtures';
 import { describe, expect, it } from 'vitest';
 import { calculateFuelRange } from '../range';
 import { assessStationReachability } from '../reachability';
-import { parseFuelStationsJson, validateFuelStations, getDemoFuelStations } from '../stations';
+import { parseFuelStationsJson, validateFuelStations } from '../stations';
 import { station, route, fuel } from './fixtures';
 import type { FuelStation } from '../types';
 
@@ -92,11 +93,11 @@ describe('station reachability', () => {
 });
 
 describe('station dataset validation', () => {
-  it('loads ten fictional coherent demo stations and returns independent copies', () => {
+  it('loads independent numeric test inputs without fictional coordinates', () => {
     const stations = getDemoFuelStations();
     expect(stations.length).toBeGreaterThanOrEqual(8);
     expect(stations.every(s => s.isSynthetic && s.priceSource === 'sample')).toBe(true);
-    expect(stations.every(s => s.latitude! >= 29.4 && s.latitude! <= 30.27 && s.longitude! >= -98.5 && s.longitude! <= -97.74)).toBe(true);
+    expect(stations.every(s => s.latitude === null && s.longitude === null)).toBe(true);
     stations[0].fuelTypes.push('changed');
     expect(getDemoFuelStations()[0].fuelTypes).not.toContain('changed');
     expect(parseFuelStationsJson(JSON.stringify(stations)).valid).toBe(true);

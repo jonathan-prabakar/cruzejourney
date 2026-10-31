@@ -25,6 +25,8 @@ export function assessStationReachability(input: ReachabilityInput): StationReac
       (input.options?.allowBacktracking !== undefined && typeof input.options.allowBacktracking !== 'boolean')) {
     return answer('UNKNOWN', 'INVALID_INPUT', 'Fuel type or safety constraints are invalid.');
   }
+  if (station.truckAccess === 'no') return answer('EXCLUDED', 'UNAVAILABLE', 'OpenStreetMap explicitly marks this station as unsuitable for heavy goods vehicles.');
+  if (station.fuelTypes.includes('unknown')) return answer('UNKNOWN', 'INCOMPATIBLE_FUEL', 'Required fuel availability is not recorded; it is not assumed to be diesel.');
   if (!station.isAvailable) return answer('EXCLUDED', 'UNAVAILABLE', 'Station is marked unavailable.');
   if (!station.fuelTypes.some(type => type.trim().toLowerCase() === input.requiredFuelType.trim().toLowerCase())) {
     return answer('EXCLUDED', 'INCOMPATIBLE_FUEL', 'Station does not list required fuel type ' + input.requiredFuelType + '.');

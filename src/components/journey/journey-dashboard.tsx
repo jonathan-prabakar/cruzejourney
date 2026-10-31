@@ -135,7 +135,7 @@ export default function JourneyDashboard({ intelligenceAdapter = null, diagnosti
             <div><strong data-testid="arrival-fuel">{plan.arrivalFuelPercent?.toFixed(1) ?? '—'}<small>%</small></strong><span>Estimated arrival fuel</span></div>
           </div>
           <div className="jp-cost-row"><span>Modeled fuel purchases <b>{money(plan.purchaseCost)}</b></span><span>{plan.fuelStops.length} refill stop(s) · {plan.fuelAddedGallons.toFixed(1)} gal added</span></div>
-          <p className="jp-note">Purchases exclude fuel already in the tank. Sample prices, full refill to 100%; arrival is not guaranteed.</p>
+          <p className="jp-note">Purchases exclude fuel already in the tank. Dated official diesel prices, modeled full refill to 100%; arrival is not guaranteed.</p>
           <p className="jp-planning-reason">{planning.preferenceExplanation}</p>
           {plan.warnings.map((warning, i) => <p role="alert" className="jp-error" key={i}><TriangleAlert size={14}/>{warning}</p>)}
           {showRecommended && <div className="jp-comparison"><p><strong>Recommended feasible alternative</strong><br/>
@@ -150,7 +150,7 @@ export default function JourneyDashboard({ intelligenceAdapter = null, diagnosti
             {plan.waypoints.map((w, i) => <div className="jp-stop-row" key={w.id}>
               <span className={'jp-stop-icon ' + w.kind}>{w.kind === 'fuel' ? <Fuel size={16}/> : <Utensils size={16}/>}</span>
               <div><button className="jp-stop-name" onClick={() => setSelectedStationId(w.kind === 'fuel' ? w.id : planning.amenities.find(a => a.id === w.id)?.stationId ?? null)}>{waypointName(w)}</button>
-                <p>{w.kind === 'fuel' ? 'Fictional fuel stop · full refill' : 'Fictional amenity waypoint'} · modeled access</p>
+                <p>{w.kind === 'fuel' ? 'Verified truck stop · modeled full refill' : 'Amenity waypoint'} · modeled access</p>
                 {w.kind === 'fuel' && <label className="jp-replace">Change stop<select aria-label={'Replace fuel stop ' + (i + 1)} value={w.id} disabled={playing}
                   onChange={e => edit(plan.waypoints.map((p, index) => index === i ? { ...p, id: e.target.value } : p), true)}>
                   {planning.stations.filter(s => s.fuelTypes.includes('diesel') && s.isAvailable && s.detourMiles !== null).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
@@ -194,8 +194,9 @@ export default function JourneyDashboard({ intelligenceAdapter = null, diagnosti
           <p>{context.diagnostics[0]?.description ?? 'Engine-warning mode introduces a mid-trip code; combined mode introduces it before the first refill.'}</p></div></div>
         <section className="jp-stop-inspection" aria-label="Stop and amenities">
           <div className="jp-card-label"><Coffee size={15}/><span>A STOP WORTH MAKING</span></div>
-          {selectedStation ? <><h3>{selectedStation.name}</h3><p>Fictional demo station · {selectedStation.distanceAlongRouteMiles!.toFixed(1)} base-route mi</p>
-            <div className="jp-inspection-values"><span><strong>{money(selectedStation.pricePerGallon)}</strong><small>sample / US gal</small></span><span><strong>{selectedStation.detourMiles?.toFixed(1) ?? '—'} mi</strong><small>modeled access loop</small></span></div>
+          {selectedStation ? <><h3>{selectedStation.name}</h3><p>Verified truck stop · {selectedStation.distanceAlongRouteMiles!.toFixed(1)} base-route mi</p>
+            <div className="jp-inspection-values"><span><strong>{money(selectedStation.pricePerGallon)}</strong><small>Auto Diesel / US gal · {selectedStation.priceVerifiedAt}</small></span><span><strong>{selectedStation.detourMiles?.toFixed(1) ?? '—'} mi</strong><small>estimated access loop</small></span></div>
+            {selectedStation.sourceUrl && <a className="jp-text-button" href={selectedStation.sourceUrl} target="_blank" rel="noreferrer">Official truck-stop details and current prices</a>}
             {(() => {
               const exists = plan.waypoints.some(w => w.id === selectedStation.id);
               const next = [...plan.waypoints, { id: selectedStation.id, kind: 'fuel' as const }].sort((a, b) => position(a) - position(b));
@@ -209,7 +210,7 @@ export default function JourneyDashboard({ intelligenceAdapter = null, diagnosti
               const exists = plan.waypoints.some(w => w.id === a.id);
               return <div key={a.id}><span>{a.category === 'restaurant' ? <Utensils size={15}/> : <Coffee size={15}/>}</span><div><strong>{a.name}</strong><p>Fictional {a.category} · +{a.extraDistanceMiles.toFixed(2)} modeled mi</p><small>Hours, ratings and walking time unavailable</small></div>
                 <button aria-label={(exists ? 'Remove ' : 'Add ') + a.name} disabled={playing} onClick={() => edit(exists ? plan.waypoints.filter(w => w.id !== a.id) : [...plan.waypoints, { id: a.id, kind: 'amenity' }], true)}>{exists ? <Check size={15}/> : <Plus size={15}/>}</button></div>;
-            })}{!shownAmenities.length && <p>No fictional amenities match your applied preferences at this stop.</p>}</div>
+            })}{!shownAmenities.length && <p>No verified amenity data is available at this stop.</p>}</div>
           </> : <p>No station in this corridor segment. Increase starting fuel if the destination is not reachable.</p>}
         </section>
       </aside>

@@ -6,6 +6,12 @@ import { createJourneyGemmaAdapter, deterministicJourneyInsight, JourneyIntellig
 import { bridgeExistingGemmaCore, compactJourneyFacts } from '../gemma-core-bridge';
 import type { JourneyInsight } from '../types';
 
+vi.mock('../places', async importOriginal => ({
+  ...await importOriginal<typeof import('../places')>(),
+  stationsForRoute: (await import('./station-fixtures')).testStationsForRoute,
+  amenitiesForRoute: (await import('./station-fixtures')).testAmenitiesForRoute,
+}));
+
 function context() {
   const planning = calculateJourneyPlan({ route: buildCuratedRoute('san-antonio', 'austin'), preferences: DEFAULT_PREFERENCES });
   return makeJourneyIntelligenceContext(planning, generateSimulationFrames(planning.requested, 'combined')[0]);

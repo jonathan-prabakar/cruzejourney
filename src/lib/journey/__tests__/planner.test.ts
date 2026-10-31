@@ -1,9 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { DEMO_LOCATIONS, buildCuratedRoute, curatedRouteProvider, requestJourneyRoute, swapEndpoints, validateEndpoints } from '../routes';
 import { DEFAULT_PREFERENCES, calculateJourneyPlan, evaluateItinerary, PLANNING_MPG } from '../planner';
 import { stationsForRoute, amenitiesForRoute } from '../places';
 import { positionAt } from '../geometry';
 import type { JourneyPreferences, JourneyWaypoint } from '../types';
+
+vi.mock('../places', async importOriginal => ({
+  ...await importOriginal<typeof import('../places')>(),
+  stationsForRoute: (await import('./station-fixtures')).testStationsForRoute,
+  amenitiesForRoute: (await import('./station-fixtures')).testAmenitiesForRoute,
+}));
 
 const route = buildCuratedRoute('san-antonio', 'austin');
 const input = (preferences: Partial<JourneyPreferences> = {}, waypoints?: JourneyWaypoint[]) =>

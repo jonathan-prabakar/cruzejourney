@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import demo from '../../../data/demo-telemetry.json';
 import { calculateFuelIntelligence } from '../intelligence';
-import { getDemoFuelStations } from '../stations';
+import { getDemoFuelStations } from './station-fixtures';
 import { DEMO_ROUTE_LENGTH_MILES, getDemoRouteContext } from '../demo';
 import { fuel, route, station, telemetry, vehicle } from './fixtures';
 import type { FuelIntelligenceInput, FuelIntelligenceConfig } from '../types';

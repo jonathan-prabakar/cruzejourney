@@ -19,18 +19,22 @@ import type { VehicleTelemetry } from "@/lib/telemetry/types";
 export default function Efficiency({
   history,
   averageMpg,
+  initialFuelPercent = demoDataset.records[0].fuel_percent,
+  tankCapacity = demoDataset.metadata.vehicle.tank_capacity_gallons,
 }: {
   history: readonly VehicleTelemetry[];
   averageMpg: number;
+  initialFuelPercent?: number;
+  tankCapacity?: number;
 }) {
-  const start = demoDataset.records[0].fuel_percent;
+  const start = initialFuelPercent;
   const efficiencyHistory = history
     .filter((_, i) => i % 4 === 0 || i === history.length - 1)
     .map((r) => ({
       time: formatDemoTime(r.timestamp),
       gallons:
         ((start - r.fuel_percent) / 100) *
-        demoDataset.metadata.vehicle.tank_capacity_gallons,
+        tankCapacity,
     }));
   const currentMpg = history.at(-1)?.mpg ?? null;
   const used = efficiencyHistory.at(-1)?.gallons ?? 0;

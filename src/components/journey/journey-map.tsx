@@ -8,8 +8,9 @@ export default function JourneyMap({ plan, stations, amenities, frame, selectedS
 }) {
   const [zoom, setZoom] = useState(1);
   const points = plan.route.coordinates;
-  const minLon = Math.min(...points.map(p => p[0])), maxLon = Math.max(...points.map(p => p[0]));
-  const minLat = Math.min(...points.map(p => p[1])), maxLat = Math.max(...points.map(p => p[1]));
+  const bounds = [...points, ...stations.map(s => s.coordinate)];
+  const minLon = Math.min(...bounds.map(p => p[0])), maxLon = Math.max(...bounds.map(p => p[0]));
+  const minLat = Math.min(...bounds.map(p => p[1])), maxLat = Math.max(...bounds.map(p => p[1]));
   const lonSpan = maxLon - minLon || 0.001, latSpan = maxLat - minLat || 0.001;
   const project = (p: Coordinate) => [80 + (p[0] - minLon) / lonSpan * 640, 445 - (p[1] - minLat) / latSpan * 370];
   const path = points.map(p => project(p).map(n => n.toFixed(1)).join(',')).join(' ');
@@ -17,7 +18,7 @@ export default function JourneyMap({ plan, stations, amenities, frame, selectedS
   const from = project(points[0]), to = project(points.at(-1)!);
   return <div className="jp-map" data-testid="journey-map">
     <div className="jp-map-title"><span className="jp-eyebrow">YOUR ROUTE</span><h2>{plan.route.origin.name} <span>→</span> {plan.route.destination.name}</h2>
-      <p>Cached road geometry · fictional stop access loops</p><p className="jp-map-distance">{frame.remainingDistanceMiles.toFixed(1)} mi remaining · {(frame.distanceMiles / plan.totalDistanceMiles * 100).toFixed(0)}% traveled</p></div>
+      <p>Cached road geometry · verified truck stops · modeled access loops</p><p className="jp-map-distance">{frame.remainingDistanceMiles.toFixed(1)} mi remaining · {(frame.distanceMiles / plan.totalDistanceMiles * 100).toFixed(0)}% traveled</p></div>
     <div className="jp-map-tools"><button aria-label="Zoom in" onClick={() => setZoom(z => Math.min(1.6, z + 0.2))}>+</button>
       <button aria-label="Fit route bounds" onClick={() => setZoom(1)}>Fit</button></div>
     <svg viewBox="0 0 800 510" preserveAspectRatio="xMidYMid meet" role="img" aria-label={'Route from ' + plan.route.origin.name + ' to ' + plan.route.destination.name}>
@@ -30,7 +31,7 @@ export default function JourneyMap({ plan, stations, amenities, frame, selectedS
         <polyline points={path} stroke="#1f3d54" strokeWidth="10" strokeLinejoin="round" fill="none"/>
         <polyline points={path} stroke="url(#jp-route-color)" strokeWidth="4" strokeLinejoin="round" fill="none"/>
         {stations.map(s => { const p = project(s.coordinate), selected = plan.waypoints.some(w => w.id === s.id);
-          return <g key={s.id} role="button" tabIndex={0} aria-label={'Inspect fictional ' + s.name} onClick={() => onStation(s.id)}
+          return <g key={s.id} role="button" tabIndex={0} aria-label={'Inspect truck stop ' + s.name} onClick={() => onStation(s.id)}
             onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onStation(s.id); } }} className="jp-map-pin">
             <circle cx={p[0]} cy={p[1]} r={selectedStationId === s.id ? 13 : 9} fill={selected ? '#00d1a7' : '#152d42'} stroke={selected ? '#8dffe6' : '#5d8bae'} strokeWidth="2"/>
             <text x={p[0]} y={p[1] + 3} textAnchor="middle" fontSize="9" fill={selected ? '#042f27' : '#bddaff'}>{selected ? 'F' : '·'}</text>

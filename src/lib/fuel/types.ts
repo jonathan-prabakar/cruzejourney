@@ -7,7 +7,16 @@ export interface FuelStation {
   longitude: number | null;
   fuelTypes: string[];
   pricePerGallon: number | null;
-  priceSource: 'sample' | 'verified';
+  priceSource: 'sample' | 'verified' | 'unknown';
+  /** Link to the station operator's published location and fuel-price page. */
+  sourceUrl?: string;
+  /** Calendar date on which the official per-gallon price was checked. */
+  priceVerifiedAt?: string;
+  address?: string;
+  truckParkingSpaces?: number;
+  defLanes?: number;
+  /** Operator-listed truck services; this does not guarantee a truck-legal route entrance. */
+  truckAccess?: 'yes' | 'no' | 'unknown';
   distanceAlongRouteMiles: number | null;
   /** Full additional leave-and-rejoin distance; conservatively charged before arrival. */
   detourMiles: number | null;

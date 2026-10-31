@@ -1,8 +1,8 @@
-import demo from '../../data/demo-telemetry.json';
-import { getDemoFuelStations } from '../fuel/stations';
-import { getDemoRouteContext } from '../fuel/demo';
-import { calculateFuelIntelligence } from '../fuel/intelligence';
-import type { VehicleIntelligenceContext } from './types';
+import demo from '../../../data/demo-telemetry.json';
+import { getDemoFuelStations } from '../../fuel/__tests__/station-fixtures';
+import { getDemoRouteContext } from '../../fuel/demo';
+import { calculateFuelIntelligence } from '../../fuel/intelligence';
+import type { VehicleIntelligenceContext } from '../types';
 
 /** Reproducible INPUT scenarios only. No model responses or fabricated AI successes. */
 export function createIntelligenceScenarios(): Record<'lowFuel' | 'criticalFuel' | 'diagnostic' | 'combined', VehicleIntelligenceContext> {

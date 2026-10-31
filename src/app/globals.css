@@ -1,3 +1,4 @@
+@import "maplibre-gl/dist/maplibre-gl.css";
 @import "tailwindcss";
 @import "../styles/brand-tokens.css";
 @font-face {
@@ -1977,3 +1978,27 @@ select {
 .replay-timeline input[type="range"]::-webkit-slider-thumb { appearance:none; width:11px; height:11px; margin-top:-4px; border-radius:50%; background:var(--blue); }
 .replay-timeline input[type="range"]::-moz-range-track { height:3px; background:#28374a; border-radius:3px; }
 .replay-timeline input[type="range"]::-moz-range-thumb { width:11px; height:11px; border:0; border-radius:50%; background:var(--blue); }
+
+.destination-select { color: inherit; background: #101b28; border: 1px solid #41668a; border-radius: 4px; font: inherit; padding: 2px 5px; max-width: 100px; cursor: pointer; }
+.destination-select:focus-visible { outline: 2px solid #00d1a7; outline-offset: 3px; }
+
+.real-map-container { position: absolute; inset: 0; }
+.real-map-controls { position: absolute; right: 18px; top: 100px; display: flex; gap: 5px; pointer-events: auto; }
+.real-map-controls button { display: flex; align-items: center; gap: 5px; padding: 8px; background: #101b28; color: #dbeafe; border: 1px solid #41668a; border-radius: 5px; font-size: 11px; cursor: pointer; }
+.real-map-controls button[aria-pressed="true"] { color: #00d1a7; border-color: #00d1a7; }
+.real-map-controls button:disabled { opacity: .5; cursor: wait; }
+.real-map-controls button:focus-visible { outline: 2px solid #00d1a7; outline-offset: 3px; }
+.real-truck-marker { width: 38px; height: 38px; border: 3px solid #082d29; border-radius: 50%; background: #00d1a7; color: #082d29; display: grid; place-items: center; }
+.map-load-status { position: absolute; top: 145px; left: 20px; max-width: min(420px, 80%); padding: 10px; background: #101b28; color: #dbeafe; font-size: 12px; }
+.real-route-map .maplibregl-ctrl-attrib { font-size: 10px; }
+.real-route-map .maplibregl-ctrl-bottom-right { bottom: 30px; }
+.real-route-map .maplibregl-ctrl-bottom-left { bottom: 30px; }
+@media(max-width:600px) { .real-map-controls { top: 93px; right: 10px; } .real-map-controls button { padding: 6px; font-size: 10px; } }
+/* Keep mandatory source attribution reachable above the cockpit caption. */
+.real-route-map .maplibregl-ctrl-attrib-button { min-width: 24px; min-height: 24px; }
+
+.return-to-trip { position: absolute; left: 25px; top: 90px; padding: 7px 10px; color: #dbeafe; background: #101b28; border: 1px solid #41668a; border-radius: 5px; font-size: 11px; cursor: pointer; }
+.routing-error { color: #fca5a5; }
+.route-notice { margin: 4px 0; padding: 7px 9px; color: #baffea; border: 1px solid #1c6f5c; background: #06251f9e; font-size: 11px; line-height: 1.4; }
+.real-map-controls { flex-wrap: wrap; max-width: min(350px, calc(100% - 30px)); justify-content: flex-end; }
+@media(max-width:600px) { .return-to-trip { left: 18px; top: 78px; font-size: 10px; } .real-map-controls { top: 110px; } }

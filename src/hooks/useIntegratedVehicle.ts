@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useVehicleTelemetry } from "./useVehicleTelemetry";
-import { createDemoTelemetryProvider } from "../lib/telemetry/provider";
+import { TelemetryPlayback } from "../lib/telemetry/playback";
+import { roadRoutes, type RoutePlan } from "../lib/integration/road-routes";
+import { type DemoRouteId } from "../lib/integration/routes";
 import {
-  demoDataset,
   getDemoSnapshot,
   selectFeasibleRecommendation,
 } from "../lib/integration/snapshot";
@@ -12,17 +13,32 @@ import {
   prepareIntelligenceContext,
   buildFallback,
 } from "../lib/intelligence";
+import type { RunDuration } from "../lib/telemetry/types";
 import type { VehicleIntelligenceResult } from "../lib/intelligence/types";
 
-const recordIndices = new Map(
-  demoDataset.records.map((r, i) => [r.timestamp, i]),
-);
-export function useIntegratedVehicle() {
-  const [provider] = useState(() => createDemoTelemetryProvider());
+export function useIntegratedVehicle(
+  routeId: DemoRouteId = "austin",
+  roadMode = true,
+  plan?: RoutePlan,
+  initialRunDuration: RunDuration | null = null,
+) {
+  const trip = plan?.trip ?? roadRoutes[routeId];
+  const dataset = trip.dataset;
+  const recordIndices = new Map(
+    dataset.records.map((r, i) => [r.timestamp, i]),
+  );
+  const [provider] = useState(() => {
+    const provider = new TelemetryPlayback();
+    if (!provider.loadDataset(dataset).valid)
+      throw new Error("Invalid route dataset");
+    provider.setRunDuration(initialRunDuration);
+    return provider;
+  });
   const playback = useVehicleTelemetry(provider);
   const snapshot = useMemo(
-    () => getDemoSnapshot(playback.playback.index),
-    [playback.playback.index],
+    () =>
+      getDemoSnapshot(playback.playback.index, routeId, roadMode, plan?.trip),
+    [playback.playback.index, routeId, roadMode, plan],
   );
   const [availability, setAvailability] = useState<{
     available: boolean;
@@ -36,7 +52,12 @@ export function useIntegratedVehicle() {
         const response = await fetch("/api/intelligence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ index }),
+          body: JSON.stringify({
+            index,
+            routeId,
+            ...(plan ? { planId: plan.id } : {}),
+            ...(roadMode ? { mode: "road" } : {}),
+          }),
           signal: options?.signal,
         });
         if (!response.ok) throw new Error("Intelligence service unavailable");
@@ -97,8 +118,43 @@ export function useIntegratedVehicle() {
     },
     [provider, controller],
   );
+  const getMotionProgress = useMemo(() => {
+    const start = Date.parse(dataset.records[0].timestamp);
+    const times = dataset.records.map(
+      (record) => Date.parse(record.timestamp) - start,
+    );
+    return () => {
+      const elapsed = provider.getElapsedMs();
+      let low = 0,
+        high = times.length - 1;
+      while (low < high) {
+        const mid = Math.ceil((low + high) / 2);
+        if (times[mid] <= elapsed) low = mid;
+        else high = mid - 1;
+      }
+      if (low === times.length - 1) return 1;
+      const fraction = Math.min(
+        1,
+        Math.max(0, (elapsed - times[low]) / (times[low + 1] - times[low])),
+      );
+      const v0 = dataset.records[low].speed_mph,
+        v1 = dataset.records[low + 1].speed_mph;
+      const distanceFraction =
+        v0 + v1 > 0
+          ? (v0 * fraction + ((v1 - v0) * fraction * fraction) / 2) /
+            ((v0 + v1) / 2)
+          : fraction;
+      return (
+        (trip.progress[low] +
+          (trip.progress[low + 1] - trip.progress[low]) * distanceFraction) /
+        trip.miles
+      );
+    };
+  }, [dataset, provider, trip]);
   return {
     snapshot,
+    getMotionProgress,
+    trip,
     selectedStop: selectFeasibleRecommendation(
       snapshot.fuel,
       result,
@@ -107,6 +163,11 @@ export function useIntegratedVehicle() {
     playback: playback.playback,
     play: playback.play,
     pause: playback.pause,
+    pauseForRouting: () => {
+      controller.invalidate();
+      provider.pause();
+      return provider.getPlaybackState().index;
+    },
     reset: () => {
       controller.invalidate();
       playback.reset();
@@ -116,6 +177,7 @@ export function useIntegratedVehicle() {
       playback.seekTo(index);
     },
     setPlaybackSpeed: playback.setPlaybackSpeed,
+    setRunDuration: playback.setRunDuration,
     intelligence: {
       result,
       state: intelligenceState.status,

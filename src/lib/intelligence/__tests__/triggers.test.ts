@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { IntelligenceController } from '../triggers';
 import { context, now, transportResult } from './fixtures';
-import { createIntelligenceScenarios } from '../scenarios';
+import { createIntelligenceScenarios } from './scenarios';
 import type { VehicleIntelligenceContext, VehicleIntelligenceResult } from '../types';
 
 const controllers: IntelligenceController[] = [];

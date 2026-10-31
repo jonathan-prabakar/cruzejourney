@@ -20,7 +20,7 @@ Hackathon evaluators and drivers exploring a simulated freight-truck journey. Dr
 
 ## Capabilities and Constraints
 
-The integrated application uses M2 synthetic telemetry playback, deterministic M3 fuel recommendations and educational diagnostics, plus optional server-side Gemma decision support. No live vehicle, real OBD-II, authentication or database. One synthetic San Antonio–Austin journey; fictional stations/prices. M5 remains unimplemented.
+The integrated application uses M2 synthetic telemetry playback, deterministic M3 fuel recommendations and educational diagnostics, plus optional server-side Gemma decision support. No live vehicle, real OBD-II, authentication or database. Four San Antonio road journeys use selected real Love's truck stops with official Auto Diesel price snapshots checked 2026-10-31. Vehicle readings, traffic, station availability and truck-specific navigation remain simulated or unavailable. M5A is available at `/journey` with a bounded I-35 corridor planner, modeled refills and deterministic intelligence; it uses the same verified station source and leaves unsourced amenity coverage empty.
 
 ## Brand Commitments
 
@@ -41,3 +41,7 @@ Keyboard controls, visible focus, responsive layouts, reduced motion, readable c
 ## Current interface commitment
 
 The user explicitly requested a fixed, lightly gamified driving interface with no sidebar or tabs. Preserve existing functionality and brand assets while presenting the primary experience as one cockpit. Long explanations remain accessible through detail inspections. The attached M4 diagnostic-engine prompt is separate context; this UI task does not implement or merge that engine.
+
+## Real-road simulation
+
+The real-map branch adds four San Antonio departures: Austin, Dallas, Houston and El Paso. MapLibre/OpenFreeMap render real roads and available 3D buildings. Cached OSRM road routes and a curated list of 12 official Love's truck stops support the simulation. Stops list truck parking, DEF lanes and diesel; per-gallon prices are dated operator-page snapshots rather than live data. Vehicle readings, fuel consumption, diagnostics and driving progress remain simulated. This is not live traffic, live station availability or truck-specific routing.

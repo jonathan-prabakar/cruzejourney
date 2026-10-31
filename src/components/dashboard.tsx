@@ -1,5 +1,10 @@
 "use client";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  destinationDefinitions,
+  routeIds,
+  type DemoRouteId,
+} from "@/lib/integration/routes";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -26,14 +31,10 @@ import {
 import RouteMap from "./route-map";
 import Efficiency from "./efficiency";
 import { useIntegratedVehicle } from "@/hooks/useIntegratedVehicle";
-import {
-  demoDataset,
-  demoStations,
-  formatDemoTime,
-  formatDuration,
-} from "@/lib/integration/snapshot";
+import { formatDemoTime, formatDuration } from "@/lib/integration/snapshot";
 import type { FuelStation } from "@/lib/fuel/types";
-import type { PlaybackSpeed } from "@/lib/telemetry/types";
+import type { RoutePlan } from "@/lib/integration/road-routes";
+import type { RunDuration, PlaybackSpeed } from "@/lib/telemetry/types";
 type Inspection =
   | "health"
   | "efficiency"
@@ -86,7 +87,43 @@ function InspectionDialog({
 }
 
 export default function Dashboard() {
-  const app = useIntegratedVehicle();
+  const [routeId, setRouteId] = useState<DemoRouteId>("austin");
+  const [plan, setPlan] = useState<RoutePlan | undefined>();
+  const [duration, setDuration] = useState<RunDuration | null>(null);
+  return (
+    <DrivingSession
+      key={plan?.id ?? routeId}
+      routeId={routeId}
+      plan={plan}
+      initialDuration={duration}
+      onRouteChange={(id) => {
+        setPlan(undefined);
+        setRouteId(id);
+      }}
+      onPlan={(next, seconds) => {
+        setDuration(seconds);
+        setPlan(next);
+      }}
+      onOriginal={() => setPlan(undefined)}
+    />
+  );
+}
+function DrivingSession({
+  routeId,
+  plan,
+  initialDuration,
+  onRouteChange,
+  onPlan,
+  onOriginal,
+}: {
+  routeId: DemoRouteId;
+  plan?: RoutePlan;
+  initialDuration: RunDuration | null;
+  onRouteChange: (id: DemoRouteId) => void;
+  onPlan: (plan: RoutePlan, duration: RunDuration | null) => void;
+  onOriginal: () => void;
+}) {
+  const app = useIntegratedVehicle(routeId, true, plan, initialDuration);
   const { snapshot, playback, intelligence } = app;
   const {
     currentTelemetry: telemetry,
@@ -101,6 +138,80 @@ export default function Dashboard() {
   const [station, setStation] = useState<FuelStation | null>(null);
   const [inspection, setInspection] = useState<Inspection>(null);
   const [details, setDetails] = useState(false);
+  const [routing, setRouting] = useState(false);
+  const [routingError, setRoutingError] = useState("");
+  const [routeNotice, setRouteNotice] = useState("");
+  const routeAbort = useRef<AbortController | null>(null);
+  const routingLock = useRef(false);
+  const routeOperations = useRef({
+    pauseForRouting: app.pauseForRouting,
+    duration: playback.run_duration_seconds,
+  });
+  useEffect(() => {
+    routeOperations.current = {
+      pauseForRouting: app.pauseForRouting,
+      duration: playback.run_duration_seconds,
+    };
+  }, [app.pauseForRouting, playback.run_duration_seconds]);
+  const autoRerouteAttempted = useRef<string | null>(null);
+  useEffect(() => () => routeAbort.current?.abort(), []);
+  const routeToStation = useCallback(async (target: FuelStation, automatic = false) => {
+    if (routingLock.current) return;
+    routingLock.current = true;
+    if (automatic)
+      setRouteNotice(`Fuel range is shorter than this trip. Rerouting to ${target.name}…`);
+    const index = routeOperations.current.pauseForRouting();
+    const abort = new AbortController();
+    routeAbort.current?.abort();
+    routeAbort.current = abort;
+    setRouting(true);
+    setRoutingError("");
+    try {
+      const response = await fetch("/api/route-to-station", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
+        body: JSON.stringify({
+          routeId,
+          index,
+          stationId: target.id,
+          ...(plan ? { planId: plan.id } : {}),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error ?? "Unable to route to this stop.");
+      if (!abort.signal.aborted)
+        onPlan(data as RoutePlan, routeOperations.current.duration ?? null);
+    } catch (error) {
+      if (!abort.signal.aborted) {
+        const message = error instanceof Error ? error.message : "Routing failed. Try again.";
+        setRoutingError(message);
+        if (automatic) setRouteNotice(`Automatic fuel-stop reroute failed: ${message}`);
+      }
+    } finally {
+      routingLock.current = false;
+      if (!abort.signal.aborted) setRouting(false);
+    }
+  }, [onPlan, plan, routeId]);
+  useEffect(() => {
+    if (plan || fuel.status.routeSafety !== "INSUFFICIENT_RANGE") return;
+    const key = `${routeId}:original-trip`;
+    if (autoRerouteAttempted.current === key) return;
+    autoRerouteAttempted.current = key;
+    if (!recommendation || recommendation.truckAccess !== "yes") {
+      routeOperations.current.pauseForRouting();
+      return;
+    }
+    queueMicrotask(() => void routeToStation(recommendation, true));
+  }, [plan, routeId, fuel.status.routeSafety, recommendation, routeToStation]);
+  const visibleRouteNotice =
+    routeNotice ||
+    (!plan &&
+    fuel.status.routeSafety === "INSUFFICIENT_RANGE" &&
+    (!recommendation || recommendation.truckAccess !== "yes")
+      ? "No confirmed truck stop is reachable within modeled fuel range. Replay paused; select a reachable stop or seek assistance."
+      : "");
   const progress = Math.round(snapshot.progress * 100);
   const fuelState = fuel.status.fuelStatus.toLowerCase();
   const selected = fuel.recommendation.assessments.find(
@@ -138,7 +249,7 @@ export default function Dashboard() {
         ? "Review coolant warning"
         : health.overallStatus === "UNKNOWN"
           ? "Health data incomplete"
-          : "No active code observed";
+          : "Health status normal";
   return (
     <div className={`cockpit fuel-${fuelState}`}>
       <a className="skip-link" href="#instruments">
@@ -158,13 +269,27 @@ export default function Dashboard() {
           aria-label={`${progress}% of the synthetic journey completed`}
         >
           <div>
-            <span>San Antonio</span>
+            <span>{plan ? "Fuel stop route" : "San Antonio"}</span>
             <span className="track-distance">
               {number(route.currentDistanceAlongRouteMiles)} /{" "}
               {number(snapshot.totalMiles)} mi
             </span>
             <strong>
-              Austin <Flag size={12} />
+              <select
+                aria-label="Destination"
+                className="destination-select"
+                value={routeId}
+                onChange={(event) =>
+                  onRouteChange(event.target.value as DemoRouteId)
+                }
+              >
+                {routeIds.map((id) => (
+                  <option key={id} value={id}>
+                    {destinationDefinitions[id].destination}
+                  </option>
+                ))}
+              </select>{" "}
+              <Flag size={12} />
             </strong>
           </div>
           <div className="journey-progress">
@@ -191,23 +316,37 @@ export default function Dashboard() {
           <RouteMap
             onStation={openStation}
             telemetry={telemetry}
-            stations={demoStations}
+            stations={snapshot.stations}
+            routeId={routeId}
             recommendedId={recommendation?.id ?? null}
+            trip={app.trip}
+            getMotionProgress={app.getMotionProgress}
+            playing={playback.status === "playing"}
+            fastRun={Boolean(playback.run_duration_seconds)}
+            onStations={(trigger) => openInspection("stops", trigger)}
           />
         </div>
         <div className="run-heading">
           <h1>
-            The Austin run<span>.</span>
+            {plan
+              ? "The fuel stop run"
+              : `The ${snapshot.definition.destination} run`}
+            <span>.</span>
           </h1>
           <p>
-            <Navigation size={13} /> I-35 North <span>·</span>{" "}
-            {number(route.remainingRouteMiles)} modeled miles to go
+            <Navigation size={13} /> {snapshot.definition.corridor}{" "}
+            <span>·</span> {number(route.remainingRouteMiles)} road miles to go
           </p>
         </div>
+        {plan && (
+          <button className="return-to-trip" onClick={onOriginal}>
+            Return to {destinationDefinitions[routeId].destination} trip
+          </button>
+        )}
         <div className="arrival-readout">
-          <span>DEMO ARRIVAL</span>
+          <span>REPLAY ARRIVAL · CT</span>
           <strong>
-            {formatDemoTime(demoDataset.records.at(-1)!.timestamp)}
+            {formatDemoTime(snapshot.dataset.records.at(-1)!.timestamp)}
           </strong>
           <p>{Math.ceil(snapshot.remainingMinutes)} min remaining</p>
         </div>
@@ -222,15 +361,26 @@ export default function Dashboard() {
             <span className="suggested">
               {intelligence.result.source === "gemma4"
                 ? "GEMMA + M3"
-                : "M3 · DEMO"}
+                : "FUEL MODEL"}
             </span>
           </div>
-          <h3>{recommendation?.name ?? "No confirmed reachable station"}</h3>
+          <h3>{recommendation?.name ?? "No eligible mapped stop"}</h3>
           <p className="checkpoint-area">
             {recommendation
-              ? "Fictional diesel stop · modeled detour"
+              ? "Official diesel · truck parking listed"
               : fuel.status.recommendedAction}
           </p>
+          {visibleRouteNotice && (
+            <p role="status" className="route-notice">
+              {visibleRouteNotice}
+            </p>
+          )}
+          {plan && (
+            <p role="status" className="route-notice">
+              Rerouted to {plan.trip.destination}. The replay ends at this stop;
+              refueling is not simulated.
+            </p>
+          )}
           <div className="checkpoint-stats">
             <div>
               <strong>
@@ -244,7 +394,7 @@ export default function Dashboard() {
                 +{number(recommendation?.detourMiles)}
                 <small> mi</small>
               </strong>
-              <span>full detour</span>
+              <span>access allowance</span>
             </div>
             <div>
               <strong>
@@ -252,7 +402,11 @@ export default function Dashboard() {
                   ? "—"
                   : `$${recommendation.pricePerGallon.toFixed(2)}`}
               </strong>
-              <span>sample / gal</span>
+              <span>
+                {recommendation?.priceVerifiedAt
+                  ? `official · ${recommendation.priceVerifiedAt}`
+                  : "price unknown"}
+              </span>
             </div>
           </div>
           <p className="checkpoint-reason">
@@ -281,22 +435,24 @@ export default function Dashboard() {
           </button>
         </section>
         <div className="vehicle-comms">
-          <button
-            className={`comms-button ${health.overallStatus === "HIGH" || health.overallStatus === "WARNING" ? "caution-comms" : ""}`}
-            onClick={(e) => openInspection("health", e.currentTarget)}
-          >
-            <span className="comms-icon">
-              <Activity size={19} />
-            </span>
-            <span>
-              <strong>{healthTitle}</strong>
-              <small>
-                {health.overallStatus} · {health.recentEvents.length} observed
-                episodes
-              </small>
-            </span>
-            <ChevronRight size={17} />
-          </button>
+          {(health.activeCodes.length > 0 || health.overallStatus !== "INFO") && (
+            <button
+              className={`comms-button ${health.overallStatus === "HIGH" || health.overallStatus === "WARNING" ? "caution-comms" : ""}`}
+              onClick={(e) => openInspection("health", e.currentTarget)}
+            >
+              <span className="comms-icon">
+                <Activity size={19} />
+              </span>
+              <span>
+                <strong>{healthTitle}</strong>
+                <small>
+                  {health.overallStatus} · {health.recentEvents.length} observed
+                  episodes
+                </small>
+              </span>
+              <ChevronRight size={17} />
+            </button>
+          )}
           <button
             className="comms-button efficiency-comms"
             onClick={(e) => openInspection("intelligence", e.currentTarget)}
@@ -320,9 +476,9 @@ export default function Dashboard() {
         </div>
         <div className="map-caption">
           <span className="route-key" /> Planned route{" "}
-          <span className="vehicle-key" /> Synthetic GPS{" "}
+          <span className="vehicle-key" /> Simulated vehicle{" "}
           <span className="schematic-label">
-            SCHEMATIC · FICTIONAL STATIONS
+            VERIFIED TRUCK STOPS · SIMULATED DRIVE
           </span>
         </div>
       </main>
@@ -440,7 +596,9 @@ export default function Dashboard() {
         <div className="replay-controls">
           <button
             disabled={
-              playback.status === "playing" || playback.status === "ended"
+              routing ||
+              playback.status === "playing" ||
+              playback.status === "ended"
             }
             onClick={app.play}
             aria-label="Play telemetry"
@@ -454,12 +612,17 @@ export default function Dashboard() {
           >
             <Pause size={15} />
           </button>
-          <button onClick={app.reset} aria-label="Reset telemetry">
+          <button
+            disabled={routing}
+            onClick={app.reset}
+            aria-label="Reset telemetry"
+          >
             <RotateCcw size={14} />
           </button>
         </div>
         <div className="replay-timeline">
           <input
+            disabled={routing}
             type="range"
             min="0"
             max={playback.total - 1}
@@ -475,17 +638,30 @@ export default function Dashboard() {
           </span>
         </div>
         <label className="replay-speed">
-          <span>Replay speed</span>
+          <span>Run length</span>
           <select
-            value={String(playback.speed)}
-            onChange={(e) =>
-              app.setPlaybackSpeed(Number(e.target.value) as PlaybackSpeed)
+            disabled={routing}
+            value={
+              playback.run_duration_seconds
+                ? `${playback.run_duration_seconds}s`
+                : String(playback.speed)
             }
-            aria-label="Playback speed"
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value.endsWith("s")) {
+                app.setRunDuration(Number(value.slice(0, -1)) as RunDuration);
+                app.reset();
+                app.play();
+              } else app.setPlaybackSpeed(Number(value) as PlaybackSpeed);
+            }}
+            aria-label="Simulation duration or playback speed"
           >
-            <option value="1">1×</option>
-            <option value="2">2×</option>
-            <option value="5">5×</option>
+            <option value="10s">10 seconds</option>
+            <option value="15s">15 seconds</option>
+            <option value="20s">20 seconds</option>
+            <option value="1">1× real time</option>
+            <option value="2">2× speed</option>
+            <option value="5">5× speed</option>
           </select>
         </label>
         <span className="replay-source">
@@ -502,8 +678,14 @@ export default function Dashboard() {
       {station && (
         <InspectionDialog title={station.name} onClose={close}>
           <span className="detail-tag">
-            FICTIONAL DEMO STATION · {selected?.status ?? "UNKNOWN"}
+            VERIFIED TRUCK STOP · {selected?.status ?? "UNKNOWN"}
           </span>
+          <p className="fine-print">
+            The official Love&apos;s page lists {station.truckParkingSpaces} truck
+            parking spaces, {station.defLanes} DEF lanes and diesel. These
+            facilities do not confirm current pump availability or truck-legal routing.
+          </p>
+          {station.address && <p>{station.address}</p>}
           <p>
             {selected?.explanation ??
               "Reachability is unavailable for this reading."}
@@ -513,7 +695,9 @@ export default function Dashboard() {
               {station.pricePerGallon == null
                 ? "Unknown"
                 : `$${station.pricePerGallon.toFixed(2)}`}
-              <small>per gallon · fictional diesel price</small>
+              <small>
+                Auto Diesel per gallon · official price checked {station.priceVerifiedAt ?? "date unavailable"}
+              </small>
             </strong>
             <div>
               <b>{number(selected?.routeDistanceMiles)} mi</b>
@@ -521,7 +705,7 @@ export default function Dashboard() {
             </div>
             <div>
               <b>+{number(station.detourMiles)} mi</b>
-              <span>modeled full detour</span>
+              <span>routed access allowance</span>
             </div>
           </div>
           <div className="explanation">
@@ -538,6 +722,38 @@ export default function Dashboard() {
             {fuel.fuel.planningMpg} MPG and a {fuel.fuel.reservePercent}%
             reserve of total tank capacity. Estimates do not guarantee arrival.
           </p>
+          {routingError && (
+            <p role="alert" className="routing-error">
+              {routingError}
+            </p>
+          )}
+          <button
+            className="primary-button"
+            disabled={
+              routing ||
+              station.truckAccess !== "yes" ||
+              playback.status === "ended"
+            }
+            onClick={() => void routeToStation(station)}
+          >
+            <Navigation size={16} />{" "}
+            {routing ? "Finding road route…" : "Route to this station"}
+          </button>
+          <p className="fine-print">
+            Routes from the current replay position and ends at this stop. Does
+            not simulate purchasing fuel. Road routing uses a general driving
+            profile, not truck-specific dimensions or restrictions.
+          </p>
+          {station.sourceUrl && (
+            <a
+              className="outline-button"
+              href={station.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Official station details and current price
+            </a>
+          )}
           <button className="primary-button" onClick={close}>
             Back to the run <ArrowRight size={16} />
           </button>
@@ -571,7 +787,7 @@ export default function Dashboard() {
             </div>
             <div>
               <dt>Destination distance</dt>
-              <dd>{number(route.remainingRouteMiles)} modeled mi</dd>
+              <dd>{number(route.remainingRouteMiles)} road mi</dd>
             </div>
             <div>
               <dt>Planning economy</dt>
@@ -584,14 +800,24 @@ export default function Dashboard() {
             <p key={w.code}>{w.explanation}</p>
           ))}
           <p className="fine-print">
-            Synthetic readings; fictional station prices and modeled full
-            detours. Road progress comes from the unchanged M2 speed/time model,
-            never GPS straight-line distance.
+            Simulated vehicle readings on cached road routes. Stops are
+            confirmed from official Love&apos;s pages that list truck parking,
+            DEF lanes and diesel. Listed facilities do not confirm current pump
+            availability. Prices were checked 2026-10-31 and are not live; the
+            router uses a general driving profile, not truck-specific navigation.
           </p>
         </InspectionDialog>
       )}
       {inspection === "stops" && (
-        <InspectionDialog title="Stops along your route" onClose={close}>
+        <InspectionDialog
+          title={`Verified truck stops (${snapshot.stations.length})`}
+          onClose={close}
+        >
+          <p>
+            Every stop on this map is listed by Love&apos;s with diesel,
+            commercial-truck parking and DEF lanes. Prices are checked
+            snapshots; operating status and pump availability are not live.
+          </p>
           <p>{fuel.recommendation.explanation}</p>
           <div className="stop-list">
             {fuel.recommendation.assessments.map((a) => (
@@ -603,7 +829,12 @@ export default function Dashboard() {
                 <span>
                   <strong>{a.station.name}</strong>
                   <small>
-                    {a.status} · {number(a.routeDistanceMiles)} modeled mi ahead
+                    {a.status} ·{" "}
+                    {a.station.truckParkingSpaces} truck spaces ·{" "}
+                    {a.station.defLanes} DEF lanes ·{" "}
+                    {a.station.distanceAlongRouteMiles === null
+                      ? "Route position unknown"
+                      : `${number(Math.abs(a.station.distanceAlongRouteMiles - (route.currentDistanceAlongRouteMiles ?? 0)))} mi ${a.station.distanceAlongRouteMiles < (route.currentDistanceAlongRouteMiles ?? 0) ? "behind" : "along route"}`}
                   </small>
                 </span>
                 <b>
@@ -750,8 +981,10 @@ export default function Dashboard() {
       {inspection === "efficiency" && (
         <InspectionDialog title="Your driving rhythm" onClose={close}>
           <Efficiency
-            history={snapshot.history}
+            history={snapshot.dataset.records.slice(0, playback.index + 1)}
             averageMpg={snapshot.averageMpg}
+            initialFuelPercent={snapshot.dataset.records[0].fuel_percent}
+            tankCapacity={vehicle.tank_capacity_gallons}
           />
         </InspectionDialog>
       )}
@@ -772,18 +1005,21 @@ export default function Dashboard() {
               <dt>Route progress</dt>
               <dd>
                 {number(route.currentDistanceAlongRouteMiles)} /{" "}
-                {number(snapshot.totalMiles)} modeled miles · {progress}%
+                {number(snapshot.totalMiles)} road miles · {progress}%
               </dd>
             </div>
             <div>
               <dt>Trip</dt>
-              <dd>San Antonio → Austin</dd>
+              <dd>
+                {plan ? "Current position" : "San Antonio"} →{" "}
+                {snapshot.definition.destination}
+              </dd>
             </div>
             <div>
               <dt>Position</dt>
               <dd>
                 {telemetry.latitude ?? "Unknown"},{" "}
-                {telemetry.longitude ?? "Unknown"} · synthetic GPS
+                {telemetry.longitude ?? "Unknown"} · simulated road position
               </dd>
             </div>
             <div>
@@ -802,16 +1038,27 @@ export default function Dashboard() {
             </div>
           </dl>
           <p>
-            Synthetic 241-reading M2 dataset. Fictional M3 station prices and
-            modeled route/detours. Not live navigation or real vehicle
-            telemetry.
+            {playback.total} simulated vehicle readings on real road geometry,
+            with cached OpenStreetMap fuel stations. Mileage is routing-engine
+            derived; travel time and fuel consumption are estimates. No live
+            navigation, traffic or vehicle connection. Opening status and truck
+            suitability are unverified.
           </p>
           <div className="scenario-controls">
             <button
               className="outline-button"
+              disabled={
+                routing ||
+                !snapshot.dataset.records.some(
+                  (record) => record.diagnostic_code === "P0301",
+                )
+              }
               onClick={() => {
                 app.pause();
-                app.seekTo(160);
+                const diagnostic = snapshot.dataset.records.findIndex(
+                  (record) => record.diagnostic_code === "P0301",
+                );
+                if (diagnostic >= 0) app.seekTo(diagnostic);
                 close();
               }}
             >
@@ -821,11 +1068,11 @@ export default function Dashboard() {
               className="outline-button"
               onClick={() => {
                 app.pause();
-                app.seekTo(240);
+                app.seekTo(playback.total - 1);
                 close();
               }}
             >
-              Seek to critical-fuel ending
+              Seek to trip ending
             </button>
           </div>
         </InspectionDialog>

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { analyzeVehicleIntelligence } from '../orchestrator.server';
-import { createIntelligenceScenarios } from '../scenarios';
+import { createIntelligenceScenarios } from './scenarios';
 import { prepareIntelligenceContext } from '../context';
 import { context, model, fuelDecision, combinedDecision, now } from './fixtures';
 import type { IntelligenceModel, ModelDecision } from '../types';

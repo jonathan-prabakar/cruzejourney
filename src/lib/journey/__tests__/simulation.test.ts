@@ -5,6 +5,12 @@ import { buildCuratedRoute } from '../routes';
 import { generateSimulationFrames, diagnosticDistanceFor, JourneySimulation } from '../simulation';
 import { positionAt } from '../geometry';
 
+vi.mock('../places', async importOriginal => ({
+  ...await importOriginal<typeof import('../places')>(),
+  stationsForRoute: (await import('./station-fixtures')).testStationsForRoute,
+  amenitiesForRoute: (await import('./station-fixtures')).testAmenitiesForRoute,
+}));
+
 const route = buildCuratedRoute('san-antonio', 'austin');
 const plan = () => calculateJourneyPlan({ route, preferences: DEFAULT_PREFERENCES }).requested;
 afterEach(() => vi.useRealTimers());

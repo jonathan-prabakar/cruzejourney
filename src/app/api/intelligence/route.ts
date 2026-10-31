@@ -4,6 +4,8 @@ import {
   SUPPORTED_GEMMA_MODELS,
 } from "@/lib/intelligence/gemma.server";
 import { getDemoSnapshot } from "@/lib/integration/snapshot";
+import { isDemoRouteId } from "@/lib/integration/routes";
+import { getStoredRoutePlan } from "@/lib/integration/rerouting.server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export function GET() {
@@ -28,9 +30,20 @@ export const POST = createIntelligenceRequestHandler({
       typeof body !== "object" ||
       !("index" in body) ||
       typeof body.index !== "number" ||
-      Object.keys(body).some((key) => key !== "index")
+      Object.keys(body).some(
+        (key) =>
+          key !== "index" &&
+          key !== "routeId" &&
+          key !== "mode" &&
+          key !== "planId",
+      )
     )
       throw new Error("Invalid request");
-    return getDemoSnapshot(body.index).context;
+    const routeId = "routeId" in body ? body.routeId : "austin";
+    if (!isDemoRouteId(routeId)) throw new Error("Invalid route");
+    if ("mode" in body && body.mode !== "road") throw new Error("Invalid mode");
+    const plan =
+      "planId" in body ? getStoredRoutePlan(body.planId, routeId) : undefined;
+    return getDemoSnapshot(body.index, routeId, true, plan?.trip).context;
   },
 });

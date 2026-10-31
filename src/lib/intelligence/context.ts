@@ -101,8 +101,9 @@ export function prepareIntelligenceContext(input: VehicleIntelligenceContext): P
   const limitations = [
     'Decision support only; no vehicle control, confirmed mechanical diagnosis, or guaranteed arrival.',
     'Range uses configured/profile MPG and an explicit reserve; future economy can differ.',
-    'Full modeled detours are charged before arrival; no live routing or price verification.',
+    'Initial city routes are cached; station reroutes use public OSRM. Station prices are official-page snapshots, not a live feed.',
     ...(input.demoMode ? ['Dataset demo mode: telemetry is synthetic.'] : []),
+    ...(input.stations.some(s => !s.isSynthetic) ? ['Official Love\'s station pages list diesel, truck parking and DEF lanes. Current pump status and fuel stock are not live-verified; the general driving route does not account for truck dimensions or restrictions.'] : []),
     ...(input.stations.some(s => s.isSynthetic || s.priceSource === 'sample') ? ['Stations or prices include fictional demonstration values.'] : []),
     ...(capabilities.diagnostics === 'observations-only' ? ['M4 diagnostic adapter is unavailable; raw code observations only.'] : []),
     ...(!efficiency ? ['M5 efficiency capability is unavailable; no efficiency findings are invented.'] : []),
