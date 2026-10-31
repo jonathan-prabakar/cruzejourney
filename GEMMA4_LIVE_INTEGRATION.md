@@ -1,5 +1,7 @@
 # Gemma 4 live vehicle intelligence
 
+> The current read-only driver workflow and provider architecture are documented in [CONNECTED_VEHICLE_EXPERIENCE.md](CONNECTED_VEHICLE_EXPERIENCE.md). This document also retains the earlier milestone/activation history.
+
 ## Existing systems reused
 
 This activation branch starts from merged main a52c9ea. It preserves M1 cockpit UI, M2 TelemetryPlayback, M3 fuel/range/station calculations, merged M4 diagnostic descriptions and M5A route planning/simulation. M5B efficiency analytics is not merged; its capability stays unavailable. No efficiency trend is inferred from an instantaneous MPG value.

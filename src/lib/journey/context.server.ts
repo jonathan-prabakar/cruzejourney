@@ -1,3 +1,4 @@
+import { replayConnectedJourneys, type JourneySelector } from '../vehicle/connected';
 import { buildCuratedRoute } from './routes';
 import { calculateJourneyPlan } from './planner';
 import { generateSimulationFrames, initialJourneyFrame } from './simulation';
@@ -11,6 +12,12 @@ const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v ===
 const exact = (v: Record<string, unknown>, keys: string[]) => Object.keys(v).length === keys.length && Object.keys(v).every(k => keys.includes(k));
 /** Reject posted measurements/conclusions, reconstruct from bounded synthetic selectors. */
 export function resolveJourneyContext(body: unknown) {
+  if (object(body) && exact(body, ['journeys']) && Array.isArray(body.journeys)) {
+    const result = replayConnectedJourneys(body.journeys as JourneySelector[]);
+    const journey = { ...makeJourneyIntelligenceContext(result.planning, result.frame, vehicleDiagnosticsAdapter), connectedJourneys: body.journeys as JourneySelector[] };
+    const index = result.frames.indexOf(result.frame);
+    return { journey, core: { ...journeyCoreInput(journey), history: result.frames.slice(Math.max(0, index - 119), index + 1).map(f => f.telemetry) } };
+  }
   if (!object(body) || !exact(body, ['originId', 'destinationId', 'preferences', 'waypoints', 'elapsedSeconds']) ||
       typeof body.originId !== 'string' || typeof body.destinationId !== 'string' ||
       body.originId === body.destinationId || typeof body.elapsedSeconds !== 'number' ||

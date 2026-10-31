@@ -2,6 +2,7 @@ import type { JourneyIntelligenceContext } from './types';
 
 /** Selectors only: the server rebuilds route, stations, fuel, diagnostics and telemetry. */
 export function journeyRequest(context: JourneyIntelligenceContext) {
+  if (context.connectedJourneys) return { journeys: context.connectedJourneys };
   return {
     originId: context.plan.baseRoute.origin.id,
     destinationId: context.plan.baseRoute.destination.id,

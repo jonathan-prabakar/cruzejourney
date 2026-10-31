@@ -179,3 +179,28 @@
 .jp-comparison p { color:#9ebcaf; font-size:11px; line-height:1.9; }
 .jp-comparison p strong { color:#a4e1cd; }
 .jp-comparison .jp-primary { margin-top:10px; padding:9px 11px; font-size:11px; }
+
+/* Connected vehicle experience: readings are informational, demo controls isolated. */
+.jp-connection-fuel { display:flex; align-items:center; gap:12px; color:var(--jp-teal,#00d1a7); margin:22px 0; }
+.jp-connection-fuel strong { font-size:36px; }
+.jp-connection-fuel span { color:#9cb2c6; font-size:12px; }
+.jp-future,.jp-event { display:flex; gap:8px; align-items:flex-start; padding:14px; border:1px solid #355064; border-radius:8px; color:#c3d5e4; background:#102333; font-size:12px; line-height:1.7; }
+.jp-future { border-color:#775a30; color:#ffd194; }
+.jp-demo-playback { position:sticky; bottom:0; background:#0d1c29; padding-top:12px; z-index:3; }
+.jp-demo-playback>.jp-eyebrow { padding-left:22px; }
+.jp-demo-playback .jp-playback { position:static; }
+.jp-plan-action { padding:20px; border-top:1px solid #263e50; background:#0c1925; }
+.jp-plan-action>.jp-primary { width:100%; justify-content:space-between; }
+.jp-route-review { display:grid; grid-template-rows:minmax(260px,.95fr) minmax(180px,1fr)132px; min-width:0; min-height:0; overflow:hidden; background:#0a1521; }
+.jp-route-review .jp-demo-playback { position:static; }
+.jp-planner { max-height:100%; }
+.jp-plan-action { flex:0 0 auto; }
+@media(max-width:1150px) {
+  .jp-route-review { grid-template-rows:390px auto auto; overflow:visible; }
+  .jp-route-review .jp-review { overflow:visible; }
+  .jp-planner { max-height:none; }
+}
+@media(max-width:760px) { .jp-route-review { grid-template-rows:350px auto auto; } }
+@media(max-height:760px) and (min-width:1151px) { .jp-route-review { grid-template-rows:360px minmax(300px,1fr)132px; } }
+
+.jp-demo-state { margin:4px 22px 6px; color:#b7d7df; font-size:10px; line-height:1.5; }

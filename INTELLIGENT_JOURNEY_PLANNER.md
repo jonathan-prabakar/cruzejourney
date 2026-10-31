@@ -1,5 +1,7 @@
 # Intelligent Journey Planner — Milestone 5A
 
+> The current read-only driver workflow and provider architecture are documented in [CONNECTED_VEHICLE_EXPERIENCE.md](CONNECTED_VEHICLE_EXPERIENCE.md). This document also retains the earlier milestone/activation history.
+
 A functional, offline-capable journey planner and route-aware simulator is available at **/journey**, linked by **Plan journey** from the existing cockpit. The feature preserves the dark automotive design, local brand assets and existing dashboard. Its separate layout contains planning controls, a route/review area, vehicle intelligence, and live simulation instruments.
 
 ## Branch and integration boundary

@@ -28,7 +28,7 @@ export function deterministicJourneyInsight(context: JourneyIntelligenceContext)
       : station ? 'The reviewed plan includes ' + station.station.name + ' at ' + station.leg.cumulativeTravelMiles.toFixed(1) + ' modeled miles, with an explicit refill. ' +
         (meal ? 'A selected fictional restaurant break can be combined with the itinerary. ' : '') + 'Planning uses 7.5 MPG and a 10% tank reserve.'
       : 'The itinerary is feasible under the planning assumptions. Arrival fuel is estimated, not guaranteed.',
-    action: !plan.feasible ? 'Use the recommended feasible alternative or increase starting fuel.'
+    action: !plan.feasible ? 'Arrange refueling or assistance; do not continue beyond modeled usable range.'
       : diagnostics.length ? 'Arrange qualified evaluation; use the fuel plan only if continuing is appropriate. Stop safely and seek assistance if vehicle warnings or symptoms require it.'
       : station ? 'Inspect the planned stop and available amenities. Do not travel beyond modeled usable range.'
       : 'Monitor vehicle measurements and follow the route preview.',
@@ -130,7 +130,7 @@ export class JourneyIntelligenceCoordinator {
       context.frame.phase, context.frame.stopId,
       context.fuel.recommendation.recommended?.station.id,
       context.fuel.recommendation.assessments.filter(a => a.status === 'REACHABLE').map(a => a.station.id),
-      context.diagnostics.map(d => [d.code, d.severity])]);
+      context.diagnostics.map(d => [d.code, d.severity]), context.efficiency?.status]);
     const key = JSON.stringify([context.plan.id, context.frame.telemetry, context.fuel.status, context.frame.stopId]);
     if (fingerprint === this.fingerprint && (!force || (this.active && !this.active.signal.aborted && this.activeKey === key))) return;
     this.fingerprint = fingerprint;

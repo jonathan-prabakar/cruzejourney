@@ -1,3 +1,4 @@
+import demo from '../../data/demo-telemetry.json';
 import { calculateFuelRange } from '../fuel/range';
 import { assessStationReachability } from '../fuel/reachability';
 import { amenitiesForRoute, stationsForRoute } from './places';
@@ -5,17 +6,18 @@ import { itineraryGeometry } from './geometry';
 import type { Amenity, JourneyLeg, JourneyPlan, JourneyPlanningResult, JourneyPreferences, JourneyRoute, JourneyStation, JourneyVehicle, JourneyWaypoint } from './types';
 
 export const JOURNEY_VEHICLE: JourneyVehicle = Object.freeze({
-  name: 'Demo Freight Truck', tank_capacity_gallons: 120, typical_mpg: 8, fuelType: 'diesel', reservePercent: 10,
+  ...demo.metadata.vehicle, fuelType: 'diesel', reservePercent: 10,
 });
 /** Conservative planning estimate; simulated driving is 7.8–8.2 MPG. */
-export const PLANNING_MPG = 7.5;
+export const PLANNING_MPG = Math.min(7.5, JOURNEY_VEHICLE.typical_mpg);
+const TANK_GALLONS = JOURNEY_VEHICLE.tank_capacity_gallons;
 export const DEFAULT_PREFERENCES: JourneyPreferences = {
   startingFuelPercent: 17, fuelStops: 'automatic', optimization: 'balanced',
   amenities: ['restaurant', 'restroom'], scenario: 'combined',
 };
 const wantedCount = { automatic: null, none: 0, one: 1, two: 2, three: 3 } as const;
 const dwell: Record<Amenity['category'], number> = { restaurant: 1200, restroom: 300, coffee: 420, convenience: 300 };
-interface PlannerInput { route: JourneyRoute; preferences: JourneyPreferences; waypoints?: JourneyWaypoint[] }
+interface PlannerInput { refillPolicy?: 'full' | 'route-needed'; route: JourneyRoute; preferences: JourneyPreferences; waypoints?: JourneyWaypoint[] }
 interface Node { waypoint: JourneyWaypoint; name: string; position: number; access: number | null; station?: JourneyStation; amenity?: Amenity }
 
 export function evaluateItinerary(input: PlannerInput, waypoints: readonly JourneyWaypoint[],
@@ -31,7 +33,7 @@ export function evaluateItinerary(input: PlannerInput, waypoints: readonly Journ
   const nodes: Node[] = [];
   const ids = new Set<string>();
   if (waypoints.length > 8 || waypoints.filter(w => w.kind === 'fuel').length > 3) warnings.push('Demo limit: at most three fuel stops and eight total waypoints.');
-  if (!Number.isFinite(preferences.startingFuelPercent) || preferences.startingFuelPercent < 5 || preferences.startingFuelPercent > 100) warnings.push('Starting fuel must be between 5% and 100%.');
+  if (!Number.isFinite(preferences.startingFuelPercent) || preferences.startingFuelPercent < 0 || preferences.startingFuelPercent > 100) warnings.push('Starting fuel must be between 0% and 100%.');
   for (const waypoint of waypoints) {
     if (ids.has(waypoint.id)) { warnings.push('A waypoint cannot be visited twice in this bounded corridor planner.'); continue; }
     ids.add(waypoint.id);
@@ -49,12 +51,12 @@ export function evaluateItinerary(input: PlannerInput, waypoints: readonly Journ
   const totalDistanceMiles = route.distanceMiles + nodes.reduce((sum, n) => sum + (n.access ?? 0), 0);
   if (nodes.some(n => n.access === null)) warnings.push('A selected stop has an unknown detour; its itinerary cannot be confirmed.');
   const legs: JourneyLeg[] = [];
-  let gallons = 120 * preferences.startingFuelPercent / 100, current = 0, distance = 0, purchases = 0, cost: number | null = 0;
+  let gallons = TANK_GALLONS * preferences.startingFuelPercent / 100, current = 0, distance = 0, purchases = 0, cost: number | null = 0;
   let feasible = warnings.length === 0;
   if (feasible) {
     for (const node of [...nodes, { waypoint: { id: 'destination', kind: 'amenity' as const }, name: route.destination.name,
       position: route.distanceMiles, access: 0 } as Node]) {
-      const fuel = calculateFuelRange({ tankCapacityGallons: 120, fuelPercent: gallons / 120 * 100, mpg: PLANNING_MPG, reservePercent: 10 });
+      const fuel = calculateFuelRange({ tankCapacityGallons: TANK_GALLONS, fuelPercent: gallons / TANK_GALLONS * 100, mpg: PLANNING_MPG, reservePercent: 10 });
       const travel = node.position - current + node.access!;
       if (node.waypoint.id !== 'destination') {
         const candidate = node.station ?? {
@@ -64,7 +66,7 @@ export function evaluateItinerary(input: PlannerInput, waypoints: readonly Journ
         };
         const assessment = assessStationReachability({
           station: candidate, route: { currentDistanceAlongRouteMiles: current, remainingRouteMiles: route.distanceMiles - current, distanceSource: 'simulated' },
-          fuel, requiredFuelType: 'diesel', tankCapacityGallons: 120,
+          fuel, requiredFuelType: 'diesel', tankCapacityGallons: TANK_GALLONS,
         });
         if (assessment.status !== 'REACHABLE') { warnings.push(node.name + ': ' + assessment.explanation); feasible = false; break; }
       } else if (!fuel.valid || fuel.usableRangeMiles! + 1e-8 < travel) {
@@ -72,7 +74,8 @@ export function evaluateItinerary(input: PlannerInput, waypoints: readonly Journ
         feasible = false; break;
       }
       const arrival = gallons - travel / PLANNING_MPG;
-      const added = node.station ? Math.max(0, 120 - arrival) : 0;
+      const target = input.refillPolicy === 'route-needed' ? Math.min(TANK_GALLONS, (totalDistanceMiles - distance - travel) / PLANNING_MPG + TANK_GALLONS * 0.1 + 1) : TANK_GALLONS;
+      const added = node.station ? Math.max(0, target - arrival) : 0;
       const purchaseCost = node.station ? node.station.pricePerGallon === null ? null : added * node.station.pricePerGallon : 0;
       gallons = arrival + added; purchases += added; distance += travel; current = node.position;
       cost = cost === null || purchaseCost === null ? null : cost + purchaseCost;
@@ -85,17 +88,18 @@ export function evaluateItinerary(input: PlannerInput, waypoints: readonly Journ
     }
   }
   const augmented = itineraryGeometry(route, geometryNodes.map(n => ({ baseRouteMiles: n.position, accessMiles: n.access ?? 0 })));
-  const fuelStops = legs.filter(l => l.kind === 'fuel').map(leg => ({ station: stations.find(s => s.id === leg.waypointId)!, leg, refillTargetPercent: 100 as const }));
+  const fuelStops = legs.filter(l => l.kind === 'fuel').map(leg => ({ station: stations.find(s => s.id === leg.waypointId)!, leg, refillTargetPercent: leg.departureFuelGallons / TANK_GALLONS * 100 }));
   let hash = 2166136261;
-  for (const char of JSON.stringify([preferences, waypoints])) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  for (const char of JSON.stringify([preferences, waypoints, input.refillPolicy ?? 'full'])) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
   return {
+    refillPolicy: input.refillPolicy ?? 'full',
     id: route.id + ':' + (hash >>> 0).toString(16),
     baseRoute: route, route: augmented, preferences: structuredClone(preferences), waypoints: waypoints.map(w => ({ ...w })), legs, fuelStops,
     amenityStops: nodes.flatMap(n => n.amenity ? [n.amenity] : []),
     feasible, warnings, totalDistanceMiles,
     durationSeconds: route.durationSeconds + nodes.reduce((s, n) => s + (n.access ?? 0) / 20 * 3600, 0) + legs.reduce((s, l) => s + l.dwellSeconds, 0),
     estimatedConsumptionGallons: feasible ? totalDistanceMiles / PLANNING_MPG : null,
-    arrivalFuelPercent: feasible ? gallons / 120 * 100 : null, purchaseCost: feasible ? cost : null, fuelAddedGallons: purchases,
+    arrivalFuelPercent: feasible ? gallons / TANK_GALLONS * 100 : null, purchaseCost: feasible ? cost : null, fuelAddedGallons: purchases,
   };
 }
 export function calculateJourneyPlan(input: PlannerInput): JourneyPlanningResult {

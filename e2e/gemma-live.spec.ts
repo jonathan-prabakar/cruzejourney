@@ -1,3 +1,4 @@
+import { ConnectedVehicleSession } from '../src/lib/vehicle/connected';
 import { expect, test } from '@playwright/test';
 
 test('LIVE: actual server Gemma advice reaches the combined-condition journey panel', async ({ page }) => {
@@ -18,7 +19,9 @@ test('LIVE: actual server Gemma advice reaches the combined-condition journey pa
   await page.getByRole('button', { name: 'Pause simulation', exact: true }).click();
   const seek = page.getByRole('slider', { name: 'Seek journey simulation' });
   await seek.press('Home');
-  for (let i = 0; i < 3; i++) await seek.press('PageUp');
+  const demo = new ConnectedVehicleSession();
+  const onset = demo.frames.findIndex(f => f.telemetry.diagnostic_code === 'P0301'); demo.dispose();
+  for (let i = 0; i < onset; i++) await seek.press('ArrowRight');
   await expect(page.getByText('P0301 observed in simulation', { exact: true })).toBeVisible();
   const response = page.waitForResponse(r => r.url().endsWith('/api/intelligence/journey') && r.request().method() === 'POST');
   release();

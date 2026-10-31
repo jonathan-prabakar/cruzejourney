@@ -72,9 +72,10 @@ export interface JourneyLeg {
 export interface FuelStop {
   station: JourneyStation;
   leg: JourneyLeg;
-  refillTargetPercent: 100;
+  refillTargetPercent: number;
 }
 export interface JourneyPlan {
+  refillPolicy?: 'full' | 'route-needed';
   baseRoute: JourneyRoute;
   id: string;
   route: JourneyRoute;
@@ -134,6 +135,8 @@ export interface JourneyDiagnostic {
 }
 export interface DiagnosticsAdapter { evaluate(telemetry: VehicleTelemetry): JourneyDiagnostic[] }
 export interface JourneyIntelligenceContext {
+  efficiency?: import('../intelligence/types').EfficiencyFinding | null;
+  connectedJourneys?: { originId: string; destinationId: string; elapsedSeconds: number }[];
   plan: JourneyPlan;
   alternatives: JourneyPlan[];
   frame: SimulationFrame;

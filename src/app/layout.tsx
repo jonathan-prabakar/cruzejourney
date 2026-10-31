@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./journey/journey.css";
+import { ConnectedVehicleProvider } from "@/components/connected-vehicle-provider";
 export const metadata: Metadata = {
   title: "Cruze FuelSense · Journey intelligence",
   icons: {
@@ -18,7 +20,7 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body><ConnectedVehicleProvider>{children}</ConnectedVehicleProvider></body>
     </html>
   );
 }

@@ -1,5 +1,6 @@
+import { JOURNEY_VEHICLE } from './planner';
 import { TelemetryPlayback } from '../telemetry/playback';
-import type { PlaybackScheduler, TelemetryProvider } from '../telemetry/types';
+import type { PlaybackScheduler, TelemetryProvider, VehicleTelemetry } from '../telemetry/types';
 import { positionAt } from './geometry';
 import type { DiagnosticsAdapter, JourneyPlan, JourneySimulationPort, SimulationFrame, SimulationScenario, SimulationState } from './types';
 
@@ -25,29 +26,31 @@ export function diagnosticDistanceFor(plan: JourneyPlan, scenario: SimulationSce
     ? Math.min(midpoint, plan.fuelStops[0].leg.cumulativeTravelMiles * 0.65) : midpoint;
 }
 /** Route-specific measurements. Original M2 GPS is never reused on another journey. */
-export function generateSimulationFrames(plan: JourneyPlan, scenario: SimulationScenario): SimulationFrame[] {
+export function generateSimulationFrames(plan: JourneyPlan, scenario: SimulationScenario, seed?: VehicleTelemetry): SimulationFrame[] {
   if (!plan.feasible) throw new Error('Cannot simulate an itinerary that is not confirmed feasible.');
   if (!['normal', 'low-fuel', 'engine-warning', 'combined'].includes(scenario)) throw new Error('Unknown simulation scenario.');
+  const startTime = seed ? Date.parse(seed.timestamp) : start;
   const frames: SimulationFrame[] = [];
-  let distance = 0, base = 0, elapsed = 0, gallons = 120 * plan.preferences.startingFuelPercent / 100;
+  let distance = 0, base = 0, elapsed = 0, gallons = JOURNEY_VEHICLE.tank_capacity_gallons * plan.preferences.startingFuelPercent / 100;
   let purchased = 0, cost: number | null = 0;
   const hasDiagnostic = scenario === 'engine-warning' || scenario === 'combined';
   const push = (phase: SimulationFrame['phase'], speed: number, mpg: number, stopId: string | null = null) => {
     const coordinate = positionAt(plan.route, distance);
-    const code = hasDiagnostic && distance >= diagnosticDistanceFor(plan, scenario) ? 'P0301' : null;
+    const code = seed?.diagnostic_code ?? (hasDiagnostic && distance >= diagnosticDistanceFor(plan, scenario) ? 'P0301' : null);
     frames.push({
       telemetry: {
-        timestamp: new Date(start + Math.round(elapsed * 1000)).toISOString(),
+        timestamp: new Date(startTime + Math.round(elapsed * 1000)).toISOString(),
         longitude: coordinate[0], latitude: coordinate[1], speed_mph: speed,
         rpm: speed > 0 ? Math.round(800 + speed * 18 + 30 * Math.sin(frames.length / 6)) : 0,
-        fuel_percent: Math.max(0, Math.min(100, gallons / 120 * 100)),
+        fuel_percent: Math.max(0, Math.min(100, gallons / JOURNEY_VEHICLE.tank_capacity_gallons * 100)),
         mpg, coolant_temp_f: 195 + 2 * Math.sin(elapsed / 240), diagnostic_code: code,
       },
       distanceMiles: distance, baseRouteMiles: base, remainingDistanceMiles: Math.max(0, plan.totalDistanceMiles - distance),
       phase, stopId, fuelAddedGallons: purchased, purchaseCost: cost, elapsedSeconds: elapsed,
     });
   };
-  push('ready', 0, 8);
+  push('ready', 0, seed?.mpg ?? 8);
+  if (seed) frames[0].telemetry = { ...seed };
   const baseMiles = plan.totalDistanceMiles - plan.legs.reduce((sum, l) => sum + l.accessMiles, 0);
   const baseSeconds = plan.durationSeconds - plan.legs.reduce((sum, l) => sum + l.dwellSeconds + l.accessMiles / 20 * 3600, 0);
   for (const leg of plan.legs) {
@@ -63,7 +66,7 @@ export function generateSimulationFrames(plan: JourneyPlan, scenario: Simulation
       // Interval-average MPH: the same distance drives position, time and fuel accounting.
       gallons -= travel / mpg; elapsed += seconds; distance += travel;
       base = startBase + Math.min(roadMiles, Math.max(0, distance - startDistance));
-      if (gallons < 12 - 1e-7) { push('blocked', 0, mpg); return frames; }
+      if (gallons < JOURNEY_VEHICLE.tank_capacity_gallons * JOURNEY_VEHICLE.reservePercent / 100 - 1e-7) { push('blocked', 0, mpg); return frames; }
       if (i === steps - 1) { distance = leg.cumulativeTravelMiles; base = leg.baseRouteMiles; }
       push('driving', travel / seconds * 3600, mpg);
     }
@@ -73,10 +76,11 @@ export function generateSimulationFrames(plan: JourneyPlan, scenario: Simulation
     }
     if (leg.kind === 'fuel') {
       const station = plan.fuelStops.find(s => s.station.id === leg.waypointId)!.station;
-      const toAdd = 120 - gallons;
+      const target = leg.departureFuelGallons;
+      const toAdd = Math.max(0, target - gallons);
       const dwellSeconds = 120 + toAdd / 12 * 60, steps = Math.max(1, Math.ceil(dwellSeconds / 20));
       for (let i = 0; i < steps; i++) {
-        const amount = i === steps - 1 ? 120 - gallons : toAdd / steps;
+        const amount = i === steps - 1 ? Math.max(0, target - gallons) : toAdd / steps;
         gallons += amount; purchased += amount; elapsed += dwellSeconds / steps;
         cost = cost === null || station.pricePerGallon === null ? null : cost + amount * station.pricePerGallon;
         push('fuel-stop', 0, 0, leg.waypointId);
@@ -105,14 +109,14 @@ export class JourneySimulation implements JourneySimulationPort {
   private listeners = new Set<() => void>();
   private unsubscribe: () => void;
   constructor(plan: JourneyPlan, scenario: SimulationScenario,
-    private readonly provider: TelemetryProvider = new TelemetryPlayback(createDemoClock())) {
-    this.frames = generateSimulationFrames(plan, scenario);
+    private readonly provider: TelemetryProvider = new TelemetryPlayback(createDemoClock()), seed?: VehicleTelemetry) {
+    this.frames = generateSimulationFrames(plan, scenario, seed);
     const result = provider.loadDataset({
       metadata: {
         name: 'Synthetic route-aware journey simulation', source: 'FuelSense journey simulation; cached OSRM base geometry',
         synthetic: true, route: plan.route.origin.name + ' to ' + plan.route.destination.name,
         limitations: ['Synthetic telemetry; fictional stations, access loops, prices and diagnostic events.', '60 simulated seconds per real second at playback 1×. Interval-average speed readings.'],
-        vehicle: { name: 'Demo Freight Truck', tank_capacity_gallons: 120, typical_mpg: 8 },
+        vehicle: { name: JOURNEY_VEHICLE.name, tank_capacity_gallons: JOURNEY_VEHICLE.tank_capacity_gallons, typical_mpg: JOURNEY_VEHICLE.typical_mpg },
       },
       records: this.frames.map(f => f.telemetry),
     });

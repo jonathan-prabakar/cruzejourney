@@ -1,3 +1,4 @@
+import { ConnectedVehicleSession } from '../src/lib/vehicle/connected';
 import { expect, test } from '@playwright/test';
 import { resolveJourneyContext } from '../src/lib/journey/context.server';
 import { analyzeVehicleIntelligence } from '../src/lib/intelligence/orchestrator.server';
@@ -38,7 +39,9 @@ test('shows analyzing, validated advice, evidence and clears future-code advice 
   await expect(page.getByText('ANALYZING', { exact: true })).toBeVisible();
   await expect(page.getByText('GEMMA 4 ACTIVE', { exact: true })).toBeVisible();
   await page.getByRole('slider', { name: 'Seek journey simulation' }).press('Home');
-  for (let i = 0; i < 3; i++) await page.getByRole('slider', { name: 'Seek journey simulation' }).press('PageUp');
+  const demo = new ConnectedVehicleSession();
+  const onset = demo.frames.findIndex(f => f.telemetry.diagnostic_code === 'P0301'); demo.dispose();
+  for (let i = 0; i < onset; i++) await page.getByRole('slider', { name: 'Seek journey simulation' }).press('ArrowRight');
   await expect(page.getByText('P0301 observed in simulation', { exact: true })).toBeVisible();
   await expect(page.locator('.jp-ai-card')).toContainText('Observed codes: P0301', { timeout: 10000 });
   await page.getByText('Decision evidence', { exact: true }).click();
@@ -55,7 +58,7 @@ test('shows model unavailable and explicit retry recovers with validated mocked 
   });
   await page.goto('/journey');
   await expect(page.getByText('MODEL UNAVAILABLE', { exact: true })).toBeVisible();
-  await expect(page.getByRole('status')).toContainText('unsupported');
+  await expect(page.locator('.jp-ai-card [role=status]')).toContainText('unsupported');
   await page.getByRole('button', { name: 'Reassess journey' }).click();
   await expect(page.getByText('GEMMA 4 ACTIVE', { exact: true })).toBeVisible({ timeout: 10000 });
 });

@@ -8,8 +8,9 @@ export default function JourneyMap({ plan, stations, amenities, frame, selectedS
 }) {
   const [zoom, setZoom] = useState(1);
   const points = plan.route.coordinates;
-  const minLon = Math.min(...points.map(p => p[0])), maxLon = Math.max(...points.map(p => p[0]));
-  const minLat = Math.min(...points.map(p => p[1])), maxLat = Math.max(...points.map(p => p[1]));
+  const bounds = frame.telemetry.longitude !== null && frame.telemetry.latitude !== null ? [...points, [frame.telemetry.longitude, frame.telemetry.latitude] as Coordinate] : points;
+  const minLon = Math.min(...bounds.map(p => p[0])), maxLon = Math.max(...bounds.map(p => p[0]));
+  const minLat = Math.min(...bounds.map(p => p[1])), maxLat = Math.max(...bounds.map(p => p[1]));
   const lonSpan = maxLon - minLon || 0.001, latSpan = maxLat - minLat || 0.001;
   const project = (p: Coordinate) => [80 + (p[0] - minLon) / lonSpan * 640, 445 - (p[1] - minLat) / latSpan * 370];
   const path = points.map(p => project(p).map(n => n.toFixed(1)).join(',')).join(' ');

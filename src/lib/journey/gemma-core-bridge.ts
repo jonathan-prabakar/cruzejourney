@@ -16,7 +16,7 @@ export interface ExistingGemmaCoreInput {
   requiredFuelType: string;
   fuelConfig: { planningMpg: number; reservePercent: number };
   diagnostics: { available: true; findings: JourneyIntelligenceContext['diagnostics'] };
-  efficiency: null;
+  efficiency: import('../intelligence/types').EfficiencyFinding | null;
   demoMode: true;
   /** Optional extension point: add these grounded facts to the existing core's evidence catalog/prompt. */
   journey: ReturnType<typeof compactJourneyFacts>;
@@ -44,6 +44,7 @@ export function compactJourneyFacts(context: JourneyIntelligenceContext) {
     stationIds: p.fuelStops.map(s => s.station.id), amenityIds: p.amenityStops.map(a => a.id),
   });
   return {
+    connectedJourneys: context.connectedJourneys,
     originId: context.plan.baseRoute.origin.id, destinationId: context.plan.baseRoute.destination.id,
     waypoints: context.plan.waypoints,
     origin: context.plan.baseRoute.origin.name, destination: context.plan.baseRoute.destination.name,
@@ -63,7 +64,7 @@ export function journeyCoreInput(context: JourneyIntelligenceContext): ExistingG
       remainingRouteMiles: context.frame.remainingDistanceMiles, distanceSource: 'simulated' },
     stations: context.fuel.recommendation.assessments.map(a => a.station), requiredFuelType: 'diesel',
     fuelConfig: { planningMpg: PLANNING_MPG, reservePercent: 10 },
-    diagnostics: { available: true, findings: context.diagnostics }, efficiency: null, demoMode: true,
+    diagnostics: { available: true, findings: context.diagnostics }, efficiency: context.efficiency ?? null, demoMode: true,
     journey: compactJourneyFacts(context),
   };
 }
