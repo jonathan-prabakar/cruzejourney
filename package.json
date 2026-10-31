@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:integration": "vitest run src/lib/integration/__tests__",
     "intelligence:live": "RUN_GEMMA_LIVE=1 vitest run src/lib/intelligence/__tests__/live.test.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "intelligence:live:browser": "RUN_GEMMA_BROWSER_LIVE=1 playwright test e2e/gemma-live.spec.ts"
   },
   "dependencies": {
     "next": "^16.0.0",

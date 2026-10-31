@@ -1,5 +1,7 @@
 # Cruze FuelSense — Gemma 4 intelligence core
 
+> Current application activation, configuration and live verification are documented in [GEMMA4_LIVE_INTEGRATION.md](GEMMA4_LIVE_INTEGRATION.md). The original branch history and settings below are superseded where that document specifies current behavior.
+
 This branch adds a server-side, event-driven vehicle decision-support system on top of M2/M3. No dashboard, M4 diagnostic engine, M5 efficiency algorithm, vehicle control, second web application or deployment is added.
 
 ## What Gemma decides

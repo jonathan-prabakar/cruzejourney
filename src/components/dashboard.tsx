@@ -308,10 +308,10 @@ export default function Dashboard() {
               <strong>Vehicle intelligence</strong>
               <small>
                 {intelligence.result.source === "gemma4"
-                  ? "Gemma 4 reasoning"
+                  ? "Gemma 4 active"
                   : intelligence.checking
                     ? "Fallback · checking AI availability"
-                    : "Deterministic fallback"}{" "}
+                    : intelligence.statusLabel}{" "}
                 · {topInsight?.priority ?? "unknown"}
               </small>
             </span>
@@ -710,6 +710,7 @@ export default function Dashboard() {
                 ? "Checking AI availability. Deterministic advice is active."
                 : "Gemma is unavailable or not configured. No live AI response is claimed."}
           </p>
+          {intelligence.error && <p role="alert">{intelligence.error.message} Deterministic advice remains active; request another assessment to retry.</p>}
           <h3 className="detail-subheading">Overall assessment</h3>
           <p>{intelligence.result.overallAssessment}</p>
           {intelligence.result.insights.map((i) => (

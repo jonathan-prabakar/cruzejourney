@@ -62,8 +62,12 @@ export function prepareIntelligenceContext(input: VehicleIntelligenceContext): P
     telemetry, vehicle: input.vehicle, route: input.route, stations: input.stations,
     requiredFuelType: input.requiredFuelType, config: input.fuelConfig,
   });
-  const eligibleStations = [fuel.recommendation.recommended, ...fuel.recommendation.alternatives]
+  const reachableStations = [fuel.recommendation.recommended, ...fuel.recommendation.alternatives]
     .filter((s): s is NonNullable<typeof s> => s !== null && s.reachability.status === 'REACHABLE');
+  // Scope model actions to reviewed itineraries; M3's full calculation stays unchanged.
+  const reviewed = input.journey ? (input.journey.progressMiles > 0 ? [input.journey.current]
+    : [input.journey.current, ...input.journey.alternatives]).filter(p => p.feasible) : null;
+  const eligibleStations = reviewed ? reachableStations.filter(s => reviewed.some(p => p.stationIds.includes(s.station.id))) : reachableStations;
   const facts: EvidenceFact[] = [];
   const add = (id: string, domain: EvidenceFact['domain'], text: string, value?: number, unit?: string) => {
     facts.push({ id, domain, text, ...(value === undefined ? {} : { value, unit }) });
@@ -118,6 +122,7 @@ export function prepareIntelligenceContext(input: VehicleIntelligenceContext): P
   }
   return {
     vehicle: { name: input.vehicle.name, tank_capacity_gallons: input.vehicle.tank_capacity_gallons, typical_mpg: input.vehicle.typical_mpg },
+    ...(input.journey ? { journey: structuredClone(input.journey) } : {}),
     telemetry, history, fuel, eligibleStations, observedCodes, activeCodes, diagnosticFindings,
     diagnosticEpisode, coolantStatus, efficiency, facts, capabilities, limitations, demoMode: input.demoMode,
     recentInsightIds: (input.recentInsights ?? []).filter(i => typeof i.id === 'string').map(i => i.id.slice(0, 80)),

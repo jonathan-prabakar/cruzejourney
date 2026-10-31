@@ -10,6 +10,14 @@ export const rawDiagnosticAdapter: DiagnosticsAdapter = {
     description: 'Observed simulated diagnostic code. A code alone does not confirm a mechanical cause; arrange qualified evaluation.',
   }] : [],
 };
+export function initialJourneyFrame(plan: JourneyPlan): SimulationFrame {
+  return {
+    telemetry: { timestamp: '2026-10-31T14:00:00.000Z', latitude: plan.route.coordinates[0][1], longitude: plan.route.coordinates[0][0],
+      speed_mph: 0, rpm: 0, fuel_percent: plan.preferences.startingFuelPercent, mpg: 8, coolant_temp_f: 195, diagnostic_code: null },
+    distanceMiles: 0, baseRouteMiles: 0, remainingDistanceMiles: plan.totalDistanceMiles, phase: 'blocked',
+    stopId: null, fuelAddedGallons: 0, purchaseCost: 0, elapsedSeconds: 0,
+  };
+}
 const start = Date.parse('2026-10-31T14:00:00Z');
 export function diagnosticDistanceFor(plan: JourneyPlan, scenario: SimulationScenario): number {
   const midpoint = plan.totalDistanceMiles * 0.35;

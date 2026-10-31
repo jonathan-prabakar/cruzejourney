@@ -65,7 +65,7 @@ describe('Gemma orchestration with mocked model responses', () => {
     expect(r.error?.code).toBe('UNKNOWN_MODEL');
     expect(r.source).toBe('fallback');
   });
-  it.each([[429, 'RATE_LIMIT'], [404, 'UNKNOWN_MODEL'], [500, 'API_UNAVAILABLE']] as const)(
+  it.each([[401, 'AUTHENTICATION_FAILED'], [403, 'AUTHENTICATION_FAILED'], [429, 'RATE_LIMIT'], [404, 'UNKNOWN_MODEL'], [500, 'API_UNAVAILABLE']] as const)(
     'handles API %s with no raw error leakage', async (status, code) => {
       const client: IntelligenceModel = { modelId: 'gemma-4-26b-a4b-it', generate: async () => { throw { status, message: 'secret-token and private telemetry' }; } };
       const r = await analyzeVehicleIntelligence(context(), { model: client, now: () => now });
@@ -100,6 +100,32 @@ describe('Gemma orchestration with mocked model responses', () => {
     const r = await analyzeVehicleIntelligence(context(), { model: { modelId: 'mock', generate: async () => text }, now: () => now });
     expect(r.error?.code).toBe('INVALID_OUTPUT'); expect(r.source).toBe('fallback');
     expect(r.insights.some(i => i.mandatory)).toBe(true);
+  });
+  it('allows one validated output repair without weakening grounding', async () => {
+    const generate = vi.fn().mockResolvedValueOnce('invalid JSON').mockResolvedValueOnce(JSON.stringify(fuelDecision()));
+    const result = await analyzeVehicleIntelligence(context(), { model: { modelId: 'gemma-4-26b-a4b-it', generate } });
+    expect(result.source).toBe('gemma4');
+    expect(generate).toHaveBeenCalledTimes(2);
+    expect(generate.mock.calls[1][0]).toContain('previous decision was REJECTED');
+  });
+  it('requires the selected station citation even during repair and supplies its exact trusted ID', async () => {
+    const valid = fuelDecision();
+    const incomplete = structuredClone(valid);
+    const evidence = 'station.' + incomplete.insights[0].stationId;
+    incomplete.insights[0].evidenceIds = incomplete.insights[0].evidenceIds.filter(id => id !== evidence);
+    const generate = vi.fn().mockResolvedValueOnce(JSON.stringify(incomplete)).mockImplementationOnce(async (prompt: string) => {
+      expect(prompt).toContain(evidence);
+      expect(prompt).toContain('exact station.ID evidence reference');
+      return JSON.stringify(valid);
+    });
+    expect((await analyzeVehicleIntelligence(context(), { model: { modelId: 'gemma-4-26b-a4b-it', generate } })).source).toBe('gemma4');
+    expect(generate).toHaveBeenCalledTimes(2);
+  });
+  it('bounds output repair to two total generations and keeps fallback when both fail', async () => {
+    const generate = vi.fn(async () => 'not JSON');
+    const result = await analyzeVehicleIntelligence(context(), { model: { modelId: 'gemma-4-26b-a4b-it', generate } });
+    expect(result.error?.code).toBe('INVALID_OUTPUT');
+    expect(generate).toHaveBeenCalledTimes(2);
   });
   it('does not call a model with invalid context or an already-cancelled request', async () => {
     const client = model(), generate = vi.spyOn(client, 'generate');

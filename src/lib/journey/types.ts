@@ -142,6 +142,10 @@ export interface JourneyIntelligenceContext {
   amenities: Amenity[];
 }
 export interface JourneyInsight {
+  model?: string;
+  analyzedAt?: string;
+  telemetryTimestamp?: string;
+  evidence?: string[];
   priority: 'critical' | 'high' | 'medium' | 'low';
   source: 'gemma4' | 'fallback';
   title: string;

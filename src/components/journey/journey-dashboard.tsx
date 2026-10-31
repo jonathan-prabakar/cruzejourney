@@ -3,11 +3,13 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'reac
 import Image from 'next/image';
 import Link from 'next/link';
 import { Activity, ArrowDown, ArrowUp, ArrowRight, ArrowUpDown, Check, Coffee, Fuel, MapPin, Pause, Play, Plus, RotateCcw, Route, Sparkles, TriangleAlert, Trash2, Utensils } from 'lucide-react';
+import { useJourneyGemma } from '@/hooks/useJourneyGemma';
+import { vehicleDiagnosticsAdapter } from '@/lib/journey/diagnostics-adapter';
 import { useJourneySimulation } from '@/hooks/useJourneySimulation';
 import { buildCuratedRoute, curatedRouteProvider, requestJourneyRoute, validateEndpoints } from '@/lib/journey/routes';
 import { calculateJourneyPlan, DEFAULT_PREFERENCES, evaluateItinerary } from '@/lib/journey/planner';
 import { JourneyIntelligenceCoordinator, deterministicJourneyInsight, makeJourneyIntelligenceContext } from '@/lib/journey/intelligence';
-import { SIMULATION_TIME_FACTOR, rawDiagnosticAdapter } from '@/lib/journey/simulation';
+import { SIMULATION_TIME_FACTOR } from '@/lib/journey/simulation';
 import type { AmenityCategory, JourneyIntelligenceAdapter, JourneyPreferences, JourneyWaypoint, SimulationScenario, DiagnosticsAdapter } from '@/lib/journey/types';
 import LocationField, { type LocationSelection } from './location-field';
 import JourneyMap from './journey-map';
@@ -23,9 +25,11 @@ const scenarios: { id: SimulationScenario; label: string }[] = [
   { id: 'normal', label: 'Normal journey' }, { id: 'low-fuel', label: 'Low fuel' },
   { id: 'engine-warning', label: 'Engine warning' }, { id: 'combined', label: 'Combined conditions' },
 ];
-export default function JourneyDashboard({ intelligenceAdapter = null, diagnosticsAdapter = rawDiagnosticAdapter }: {
+export default function JourneyDashboard({ intelligenceAdapter, diagnosticsAdapter = vehicleDiagnosticsAdapter }: {
   intelligenceAdapter?: JourneyIntelligenceAdapter | null; diagnosticsAdapter?: DiagnosticsAdapter;
 }) {
+  const gemma = useJourneyGemma();
+  const activeAdapter = intelligenceAdapter === undefined ? gemma.adapter : intelligenceAdapter;
   const [origin, setOrigin] = useState<LocationSelection>({ id: 'san-antonio', text: 'San Antonio' });
   const [destination, setDestination] = useState<LocationSelection>({ id: 'austin', text: 'Austin' });
   const [draft, setDraft] = useState<JourneyPreferences>(DEFAULT_PREFERENCES);
@@ -42,8 +46,9 @@ export default function JourneyDashboard({ intelligenceAdapter = null, diagnosti
   const simulation = useJourneySimulation(plan);
   const { frame, playback, controls, frames } = simulation;
   const context = useMemo(() => makeJourneyIntelligenceContext(planning, frame, diagnosticsAdapter), [planning, frame, diagnosticsAdapter]);
-  const coordinator = useMemo(() => new JourneyIntelligenceCoordinator(intelligenceAdapter), [intelligenceAdapter]);
+  const coordinator = useMemo(() => new JourneyIntelligenceCoordinator(activeAdapter), [activeAdapter]);
   const generated = useSyncExternalStore(coordinator.subscribe, coordinator.getSnapshot, () => null);
+  const intelligenceState = useSyncExternalStore(coordinator.subscribe, coordinator.getState, coordinator.getState);
   const insight = generated ?? deterministicJourneyInsight(context);
   useEffect(() => { coordinator.update(context, epoch); }, [coordinator, context, epoch]);
   useEffect(() => () => { coordinator.invalidate(); }, [coordinator]);
@@ -184,10 +189,12 @@ export default function JourneyDashboard({ intelligenceAdapter = null, diagnosti
 
       <aside className="jp-intelligence" aria-label="Vehicle and journey intelligence">
         <div className="jp-panel-heading"><span className="jp-eyebrow"><Sparkles size={13}/> VEHICLE INTELLIGENCE</span><h2>Ahead of the curve.</h2><p>Important signals. One clear next step.</p></div>
-        <div className={'jp-ai-card ' + insight.priority}><div className="jp-card-label"><Sparkles size={16}/><span>{insight.source === 'gemma4' ? 'GEMMA ACTIVE' : 'DETERMINISTIC FALLBACK'}</span></div>
+        <div className={'jp-ai-card ' + insight.priority}><div className="jp-card-label"><Sparkles size={16}/><span>{intelligenceState.status === 'analyzing' || intelligenceState.status === 'pending' ? 'ANALYZING' : insight.source === 'gemma4' ? 'GEMMA 4 ACTIVE' : intelligenceState.error?.code === 'UNKNOWN_MODEL' ? 'MODEL UNAVAILABLE' : intelligenceState.error ? 'ERROR · RETRY' : 'DETERMINISTIC FALLBACK'}</span></div>
           <h3>{insight.title}</h3><p>{insight.explanation}</p><div className="jp-next-action"><span>NEXT ACTION</span><p>{insight.action}</p></div>
           <button className="jp-text-button" onClick={() => coordinator.update(context, epoch, true)}>Reassess journey <ArrowRight size={13}/></button>
-          {!intelligenceAdapter && <small>Gemma is not connected. This planner uses deterministic fallback and sends no AI requests.</small>}
+          <small role="status">{intelligenceState.error ? intelligenceState.error.message + ' Deterministic advice remains active.' : gemma.checking ? 'Checking server configuration.' : !activeAdapter ? 'Gemma is not configured. Deterministic fallback is active.' : 'Server-side analysis of simulated data; no automatic vehicle or itinerary actions.'}</small>
+          {insight.telemetryTimestamp && <small>Assessment snapshot: {new Date(insight.telemetryTimestamp).toLocaleTimeString('en-US', { timeZone: 'America/Chicago' })} simulated time · {insight.model}</small>}
+          {insight.evidence?.length ? <details><summary>Decision evidence</summary><ul>{insight.evidence.map((e, i) => <li key={i}>{e}</li>)}</ul></details> : null}
         </div>
         <div className={'jp-signal ' + (context.fuel.status.severity === 'critical' ? 'critical' : '')}><Fuel size={17}/><div><strong>{context.fuel.status.title}</strong><p>{context.fuel.status.explanation}</p><small>{context.fuel.fuel.usableRangeMiles?.toFixed(1) ?? '—'} usable mi · 10% reserve</small></div></div>
         <div className={'jp-signal ' + (context.diagnostics.length ? 'warning' : '')}><Activity size={17}/><div><strong>{context.diagnostics.length ? 'P0301 observed in simulation' : 'No simulated diagnostic code'}</strong>

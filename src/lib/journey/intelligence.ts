@@ -1,3 +1,5 @@
+import { IntelligenceError, sanitizeError } from '../intelligence/errors';
+import type { SanitizedIntelligenceError } from '../intelligence/types';
 import { calculateFuelIntelligence } from '../fuel/intelligence';
 import { evaluateItinerary, JOURNEY_VEHICLE, PLANNING_MPG } from './planner';
 import { rawDiagnosticAdapter } from './simulation';
@@ -101,6 +103,11 @@ export function createJourneyGemmaAdapter(delegate: (context: JourneyIntelligenc
 }
 /** Event-aware adapter coordinator; fallback never makes a network request. */
 export class JourneyIntelligenceCoordinator {
+  private state: { status: 'idle' | 'pending' | 'analyzing' | 'ready' | 'fallback' | 'error'; error: SanitizedIntelligenceError | null } = { status: 'idle', error: null };
+  getState = () => this.state;
+  private setState(status: typeof this.state.status, error: SanitizedIntelligenceError | null = null) {
+    this.state = { status, error }; this.listeners.forEach(l => l());
+  }
   private version = 0;
   private fingerprint = '';
   private active: AbortController | null = null;
@@ -120,8 +127,10 @@ export class JourneyIntelligenceCoordinator {
   update(context: JourneyIntelligenceContext, epoch: number, force = false): void {
     if (this.disposed) return;
     const fingerprint = JSON.stringify([context.plan.id, epoch, context.fuel.status.fuelStatus, context.fuel.status.routeSafety,
-      context.frame.phase === 'fuel-stop' || context.frame.phase === 'amenity-stop' ? context.frame.stopId : null,
-      context.diagnostics.map(d => d.code)]);
+      context.frame.phase, context.frame.stopId,
+      context.fuel.recommendation.recommended?.station.id,
+      context.fuel.recommendation.assessments.filter(a => a.status === 'REACHABLE').map(a => a.station.id),
+      context.diagnostics.map(d => [d.code, d.severity])]);
     const key = JSON.stringify([context.plan.id, context.frame.telemetry, context.fuel.status, context.frame.stopId]);
     if (fingerprint === this.fingerprint && (!force || (this.active && !this.active.signal.aborted && this.activeKey === key))) return;
     this.fingerprint = fingerprint;
@@ -130,30 +139,31 @@ export class JourneyIntelligenceCoordinator {
     if (this.timer) clearTimeout(this.timer);
     if (this.timeout) clearTimeout(this.timeout);
     this.emit(deterministicJourneyInsight(context));
+    this.setState(this.adapter ? 'pending' : 'fallback');
     if (!this.adapter) return;
     const cached = this.cache.get(key);
-    if (cached && this.now() - cached.at < 30000) { this.emit(cached.insight); return; }
+    if (cached && this.now() - cached.at < 30000) { this.emit(cached.insight); this.setState('ready'); return; }
     const run = () => {
       if (version !== this.version || this.disposed) return;
-      const abort = new AbortController(); this.active = abort; this.activeKey = key; this.lastCall = this.now();
-      this.timeout = setTimeout(() => { if (version === this.version) { abort.abort(); this.active = null; this.activeKey = null; this.version++; this.emit(deterministicJourneyInsight(context)); } }, 18000);
+      const abort = new AbortController(); this.active = abort; this.activeKey = key; this.lastCall = this.now(); this.setState('analyzing');
+      this.timeout = setTimeout(() => { if (version === this.version) { abort.abort(); this.active = null; this.activeKey = null; this.version++; this.emit(deterministicJourneyInsight(context)); this.setState('error', sanitizeError(new IntelligenceError('TIMEOUT'))); } }, 33000);
       this.adapter!.analyze(context, abort.signal).then(insight => {
         if (version !== this.version || this.disposed || abort.signal.aborted) return;
         if (this.timeout) clearTimeout(this.timeout);
         this.active = null; this.activeKey = null;
-        this.cache.set(key, { at: this.now(), insight });
+        if (insight.source === 'gemma4') this.cache.set(key, { at: this.now(), insight });
         while (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value!);
-        this.emit(insight);
-      }).catch(() => {
+        this.emit(insight); this.setState(insight.source === 'gemma4' ? 'ready' : 'fallback');
+      }).catch(error => {
         if (version !== this.version || this.disposed) return;
         if (this.timeout) clearTimeout(this.timeout);
         this.active = null; this.activeKey = null;
-        this.emit(deterministicJourneyInsight(context));
+        this.emit(deterministicJourneyInsight(context)); this.setState('error', sanitizeError(error));
       });
     };
     const delay = Math.max(0, this.lastCall + this.throttleMs - this.now());
     if (delay) this.timer = setTimeout(run, delay); else run();
   }
-  invalidate(): void { this.version++; this.fingerprint = ''; this.active?.abort(); if (this.timer) clearTimeout(this.timer); if (this.timeout) clearTimeout(this.timeout); }
+  invalidate(): void { this.version++; this.insight = null; this.cache.clear(); this.setState('idle'); this.fingerprint = ''; this.active?.abort(); if (this.timer) clearTimeout(this.timer); if (this.timeout) clearTimeout(this.timeout); }
   dispose(): void { this.invalidate(); this.disposed = true; this.cache.clear(); this.listeners.clear(); }
 }

@@ -8,7 +8,7 @@ This feature was created in a separate worktree from **origin/main at 98b6b11**,
 
 The existing M2/M3 modules, datasets, hooks and their tests were reused **unchanged** from origin/feature/m3-fuel-intelligence (0e7abf084b85462cfb6c4b36ec31204ff049affa, including the M2 foundation). They are not rewritten implementations. The journey simulation wraps the original M2 TelemetryProvider. Fuel planning calls the original M3 calculateFuelRange/assessStationReachability/calculateFuelIntelligence.
 
-The planner is now merged with the completed M1–M4/Gemma integration from main (2bc7709). The cockpit retains its telemetry, fuel, diagnostic and server-side Gemma wiring. The planner provides an explicit typed adapter and existing-core bridge; its page continues to use deterministic fallback until the journey-specific server adapter is connected. No additional SDK/client was introduced.
+The planner is now merged with the completed M1–M4/Gemma integration from main (2bc7709). The cockpit retains its telemetry, fuel, diagnostic and server-side Gemma wiring. The planner provides an explicit typed adapter and existing-core bridge; its page now connects the existing-core bridge and trusted M4 adapter through /api/intelligence/journey, with deterministic fallback when configuration or inference is unavailable. No additional SDK/client was introduced.
 
 ## Supported locations and routes
 
@@ -222,7 +222,7 @@ export default function ConnectedJourney() {
 }
 ```
 
-The current page deliberately supplies no adapter until that endpoint/core integration is ready. **Gemma active** appears only after an accepted successful model-backed response, never just because a key was entered. No live Gemma request was made or claimed in this task.
+The current page now supplies the server transport and trusted M4 adapter when the server key/model are configured. See GEMMA4_LIVE_INTEGRATION.md for the activation implementation and live verification. **Gemma active** appears only after an accepted successful model-backed response, never just because a key was entered. No live Gemma request was made or claimed in this task.
 
 ## Verification
 
@@ -254,7 +254,7 @@ The Codex in-app browser tool was unavailable in this environment; browser verif
 2. The reused src/lib/telemetry, src/lib/fuel, src/data/demo-telemetry.json, src/data/demo-fuel-stations.json and original telemetry hook/tests are identical to M2/M3. If the integration branch has modified versions, retain its authoritative engine fixes and adapt only the journey ports.
 3. Bring src/lib/journey, src/components/journey, src/app/journey, useJourneySimulation, route cache/license notice, tests/config and this guide. The existing cockpit needs only the Plan journey link.
 4. Reconcile package manifests/lockfile: this feature adds Vitest, React test-renderer/types and Playwright development tooling. Preserve the integration branch's SDK, app scripts and dependencies. No new runtime package is required by the planner.
-5. Wire the trusted M4 DiagnosticsAdapter and existing Gemma server through the bridge. Add compact journey facts to the core's catalog/prompt for preference/meal/full-plan reasoning; validate returned plan/station/amenity IDs.
+5. Completed in the activation branch: trusted M4 adapter, server selector reconstruction, existing-core bridge, compact journey prompt and validated plan/station/amenity choices. No second model client is used.
 6. Maintain server-side keys, authorization, route provenance and synthetic source labels. No automatic vehicle/itinerary action should execute.
 7. Preserve simulation controls and session cleanup. Editing restarts a reviewed itinerary; seeking/resetting must increment the intelligence epoch/invalidate pending requests.
 8. Run the integrated engine suite, these browser tests, typecheck, lint and production build. Verify all four scenarios, required-stop removal, unknown prices/detours and combined low-fuel/P0301 behavior.
@@ -263,4 +263,4 @@ The Codex in-app browser tool was unavailable in this environment; browser verif
 
 This is a bounded corridor demo, not commercial navigation. Arbitrary addresses, live places/prices/traffic, truck restrictions, highway alternatives, drag-and-drop route optimization and global minimum-cost purchase sizing are deferred. Detours/access loops, businesses, amenities, prices, availability and telemetry are modeled/fictional. Ratings/hours/walking time are not invented. Backtracking is explicitly unsupported. All range/duration/arrival values are estimates. Full tank refills are intentional and may be economically excessive.
 
-The cockpit uses the merged diagnostics engine and existing Gemma server. The planner still requires the journey-specific server adapter and trusted diagnostics port to enable those capabilities there; deterministic fallback is its shipped default. The existing development dependency audit findings remain outside this feature's functional scope; no audit success is claimed for the full development toolchain.
+The cockpit uses the merged diagnostics engine and existing Gemma server. The planner now connects those capabilities through its trusted server adapter. Deterministic fallback remains active without a configured key or accepted inference. The existing development dependency audit findings remain outside this feature's functional scope; no audit success is claimed for the full development toolchain.

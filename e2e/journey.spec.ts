@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
 
 test.beforeEach(async ({ page }) => {
+  await page.route('**/api/intelligence', route => route.fulfill({ json: { available: false, model: 'gemma-4-26b-a4b-it', status: 'API_KEY_MISSING' } }));
+  await page.route('**/api/intelligence/journey', route => route.abort());
   await page.goto('/journey');
   await expect(page.locator('[data-playback-ready=true]')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Start simulation', exact: true })).toBeEnabled();

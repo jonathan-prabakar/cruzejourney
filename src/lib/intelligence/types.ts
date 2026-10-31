@@ -1,3 +1,5 @@
+import type { compactJourneyFacts } from '../journey/gemma-core-bridge';
+import type { JourneyDecision } from '../journey/intelligence';
 import type { FuelIntelligenceConfig, FuelIntelligenceResult, FuelStation, RouteContext } from '../fuel/types';
 import type { VehicleProfile, VehicleTelemetry } from '../telemetry/types';
 
@@ -19,6 +21,7 @@ export interface EfficiencyFinding {
   metrics: { id: string; label: string; value: number; unit: 'mpg' | 'mph' | 'mph/s' | 'gallons' | 'percent' }[];
 }
 export interface VehicleIntelligenceContext {
+  journey?: ReturnType<typeof compactJourneyFacts>;
   telemetry: VehicleTelemetry | null;
   history: readonly VehicleTelemetry[];
   vehicle: VehicleProfile;
@@ -54,6 +57,7 @@ export interface ProposedInsight {
 }
 /** Deliberately no arbitrary model-authored prose or measurements in the accepted decision language. */
 export interface ModelDecision {
+  journeyChoice?: { selectedPlanId: string; stationId: string | null; amenityId: string | null };
   topPriority: string;
   insights: ProposedInsight[];
 }
@@ -73,10 +77,11 @@ export interface VehicleInsight {
   source: 'gemma4' | 'deterministic';
   mandatory: boolean;
 }
-export type IntelligenceErrorCode = 'MISSING_API_KEY' | 'UNKNOWN_MODEL' | 'TIMEOUT' | 'RATE_LIMIT'
+export type IntelligenceErrorCode = 'MISSING_API_KEY' | 'AUTHENTICATION_FAILED' | 'UNKNOWN_MODEL' | 'TIMEOUT' | 'RATE_LIMIT'
   | 'API_UNAVAILABLE' | 'INVALID_OUTPUT' | 'INVALID_CONTEXT' | 'CANCELLED';
 export interface SanitizedIntelligenceError { code: IntelligenceErrorCode; message: string }
 export interface VehicleIntelligenceResult {
+  journeyDecision?: JourneyDecision;
   overallAssessment: string;
   topPriority: string | null;
   insights: VehicleInsight[];
@@ -91,6 +96,7 @@ export interface VehicleIntelligenceResult {
   demoMode: boolean;
 }
 export interface PreparedContext {
+  journey?: ReturnType<typeof compactJourneyFacts>;
   vehicle: VehicleProfile;
   telemetry: VehicleTelemetry | null;
   history: VehicleTelemetry[];
@@ -110,7 +116,7 @@ export interface PreparedContext {
 }
 export interface IntelligenceModel {
   modelId: string;
-  generate(prompt: string, signal: AbortSignal): Promise<string>;
+  generate(prompt: string, signal: AbortSignal, thinkingLevel?: 'high' | 'minimal'): Promise<string>;
 }
 export interface AnalysisOptions {
   model?: IntelligenceModel;

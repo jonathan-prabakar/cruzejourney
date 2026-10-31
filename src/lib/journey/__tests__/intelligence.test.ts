@@ -57,7 +57,7 @@ describe('journey intelligence integration adapter and safe fallback', () => {
   });
   it('does not label an existing-core fallback as Gemma-generated', async () => {
     const adapter = bridgeExistingGemmaCore(async () => ({ source: 'fallback', model: null, insights: [] }));
-    await expect(adapter.analyze(context(), new AbortController().signal)).rejects.toThrow('deterministic fallback');
+    await expect(adapter.analyze(context(), new AbortController().signal)).rejects.toThrow('model API is unavailable');
   });
   it('validates combined meal/fuel proposals by recalculating the amenity waypoint', () => {
     const c = context(), amenity = c.amenities.find(a => a.stationId === c.plan.fuelStops[0].station.id)!;
@@ -114,7 +114,7 @@ describe('journey intelligence integration adapter and safe fallback', () => {
     expect(adapter.analyze).toHaveBeenCalledOnce();
     await vi.advanceTimersByTimeAsync(5000);
     expect(adapter.analyze).toHaveBeenCalledTimes(2);
-    await vi.advanceTimersByTimeAsync(18000);
+    await vi.advanceTimersByTimeAsync(33000);
     expect(coordinator.getSnapshot()!.source).toBe('fallback');
     coordinator.dispose();
     expect(vi.getTimerCount()).toBe(0);
