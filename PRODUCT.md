@@ -20,7 +20,7 @@ Hackathon evaluators and drivers exploring a simulated freight-truck journey. Dr
 
 ## Capabilities and Constraints
 
-Milestone 1 is frontend only. No live telemetry, playback engine, ranking, inference, AI, authentication or databases. One San Antonio–Austin journey. All stations fictional and analytics simulated.
+The integrated application uses M2 synthetic telemetry playback, deterministic M3 fuel recommendations and educational diagnostics, plus optional server-side Gemma decision support. No live vehicle, real OBD-II, authentication or database. One synthetic San Antonio–Austin journey; fictional stations/prices. M5 remains unimplemented.
 
 ## Brand Commitments
 

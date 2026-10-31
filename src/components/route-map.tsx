@@ -1,18 +1,27 @@
 "use client";
 import { Navigation, Fuel } from "lucide-react";
-import { stations, type Station } from "@/lib/mock-data";
+import type { FuelStation } from "@/lib/fuel/types";
+import type { VehicleTelemetry } from "@/lib/telemetry/types";
+import { projectDemoLocation } from "@/lib/integration/snapshot";
 export default function RouteMap({
   onStation,
+  telemetry,
+  stations,
+  recommendedId,
 }: {
-  onStation: (station: Station, trigger: HTMLButtonElement) => void;
+  onStation: (station: FuelStation, trigger: HTMLElement | SVGElement) => void;
+  telemetry: VehicleTelemetry;
+  stations: readonly FuelStation[];
+  recommendedId: string | null;
 }) {
+  const position = projectDemoLocation(telemetry.latitude, telemetry.longitude);
   return (
     <section className="route-map" aria-label="Schematic route to Austin">
       <div className="map-canvas">
         <svg
           viewBox="0 0 800 510"
           preserveAspectRatio="none"
-          role="img"
+          role="group"
           aria-label="Schematic route traveling northeast from San Antonio through New Braunfels and San Marcos to Austin. Fictional fuel stops are selectable below."
         >
           <defs>
@@ -97,13 +106,6 @@ export default function RouteMap({
             strokeWidth="6"
             strokeLinejoin="round"
           />
-          <path
-            d="M235 416L286 393 338 382 372 361"
-            fill="none"
-            stroke="#63758b"
-            strokeWidth="6"
-            strokeDasharray="4 6"
-          />
           <circle
             cx="235"
             cy="416"
@@ -120,16 +122,6 @@ export default function RouteMap({
             stroke="#dbeafe"
             strokeWidth="3"
           />
-          <circle cx="378" cy="358" r="25" fill="#00d1a7" opacity=".1" />
-          <circle
-            cx="378"
-            cy="358"
-            r="15"
-            fill="#00d1a7"
-            stroke="#0a0f1c"
-            strokeWidth="4"
-          />
-          <path d="M378 350L384 364 378 361 372 364Z" fill="#082d29" />
           <rect
             x="495"
             y="296"
@@ -148,22 +140,50 @@ export default function RouteMap({
           >
             35
           </text>
+          {stations.map((station) => {
+            const point = projectDemoLocation(
+              station.latitude,
+              station.longitude,
+            );
+            if (!point) return null;
+            return (
+              <g
+                key={station.id}
+                transform={`translate(${point.x} ${point.y})`}
+                className={`station-marker ${station.id === recommendedId ? "recommended-marker" : ""}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`View fictional ${station.name}`}
+                onClick={(event) => onStation(station, event.currentTarget)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    onStation(station, event.currentTarget);
+                  }
+                }}
+              >
+                <rect x="-12" y="-12" width="24" height="24" rx="4" />
+                <Fuel x={-7} y={-7} width={14} height={14} />
+              </g>
+            );
+          })}
+          {position && (
+            <g
+              transform={`translate(${position.x} ${position.y})`}
+              role="img"
+              aria-label={`Vehicle synthetic GPS ${telemetry.latitude}, ${telemetry.longitude}`}
+              className="vehicle-position"
+            >
+              <circle r="22" fill="#00d1a7" opacity=".1" />
+              <circle r="13" fill="#00d1a7" stroke="#0a0f1c" strokeWidth="4" />
+              <path d="M0 -7L6 7 0 4 -6 7Z" fill="#082d29" />
+            </g>
+          )}
         </svg>
         <div className="map-compass">
           <Navigation size={15} />
           <span>N</span>
         </div>
-        {stations.map((s, i) => (
-          <button
-            key={s.id}
-            className={`station-pin pin-${i}`}
-            onClick={(event) => onStation(s, event.currentTarget)}
-            aria-label={`View fictional ${s.name}`}
-          >
-            <Fuel size={16} />
-            {i === 0 && <span>Next stop</span>}
-          </button>
-        ))}
       </div>
     </section>
   );

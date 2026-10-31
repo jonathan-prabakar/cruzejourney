@@ -13,15 +13,34 @@ import {
   Cell,
 } from "recharts";
 import { TrendingUp, Sparkles } from "lucide-react";
-import { efficiencyHistory, comparison } from "@/lib/mock-data";
-export default function Efficiency() {
+import { comparison } from "@/lib/mock-data";
+import { demoDataset, formatDemoTime } from "@/lib/integration/snapshot";
+import type { VehicleTelemetry } from "@/lib/telemetry/types";
+export default function Efficiency({
+  history,
+  averageMpg,
+}: {
+  history: readonly VehicleTelemetry[];
+  averageMpg: number;
+}) {
+  const start = demoDataset.records[0].fuel_percent;
+  const efficiencyHistory = history
+    .filter((_, i) => i % 4 === 0 || i === history.length - 1)
+    .map((r) => ({
+      time: formatDemoTime(r.timestamp),
+      gallons:
+        ((start - r.fuel_percent) / 100) *
+        demoDataset.metadata.vehicle.tank_capacity_gallons,
+    }));
+  const currentMpg = history.at(-1)?.mpg ?? null;
+  const used = efficiencyHistory.at(-1)?.gallons ?? 0;
   const [view, setView] = useState<"trend" | "compare">("trend");
   return (
     <section id="efficiency" className="panel efficiency">
       <div className="panel-heading">
         <div>
           <h2>Efficiency insights</h2>
-          <p>Small changes. More miles.</p>
+          <p>M2 telemetry · M1 illustrative comparison</p>
         </div>
         <span className="chip muted">SIMULATED</span>
       </div>
@@ -29,19 +48,19 @@ export default function Efficiency() {
         <div>
           <span>Current economy</span>
           <strong>
-            8.0 <small>MPG</small>
+            {currentMpg?.toFixed(1) ?? "—"} <small>MPG</small>
           </strong>
         </div>
         <div>
           <span>Trip average</span>
           <strong>
-            8.0 <small>MPG</small>
+            {averageMpg.toFixed(1)} <small>MPG</small>
           </strong>
         </div>
         <div className="trend">
           <TrendingUp size={17} />
-          <strong>+12.7%</strong>
-          <span>vs. first sample</span>
+          <strong>{history.length}</strong>
+          <span>prefix readings</span>
         </div>
       </div>
       <button
@@ -56,7 +75,7 @@ export default function Efficiency() {
         role="img"
         aria-label={
           view === "trend"
-            ? "Simulated cumulative fuel use rises from zero to 3 gallons over 25 minutes"
+            ? `Synthetic cumulative fuel use through the current reading: ${used.toFixed(2)} gallons`
             : "Simulated smooth driving gets 8 MPG; stop and go gets 6.4 MPG"
         }
       >
@@ -139,8 +158,8 @@ export default function Efficiency() {
         <Sparkles size={17} />
         <p>
           {view === "trend"
-            ? "The simulated trip uses 3.0 gallons over 24 miles, averaging 8 MPG. Steady speed supports efficient cruising."
-            : "Over a modeled 80-mile trip, 8 MPG uses 10 gallons versus 12.5 at 6.4 MPG: 2.5 gallons less (20%). Illustrative only."}
+            ? `M2 fuel used since the first reading: ${used.toFixed(2)} gallons. Current-prefix trip average: ${averageMpg.toFixed(1)} MPG.`
+            : "M1 preview only: fixed 80-mile scenarios at 8 and 6.4 MPG use 10 and 12.5 gallons. This is not the current trip, a real saving, or an M5 analysis."}
         </p>
       </div>
     </section>

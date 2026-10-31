@@ -1,5 +1,4 @@
 "use client";
-
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import {
@@ -25,21 +24,25 @@ import {
 } from "lucide-react";
 import RouteMap from "./route-map";
 import Efficiency from "./efficiency";
+import { useIntegratedVehicle } from "@/hooks/useIntegratedVehicle";
 import {
-  vehicle,
-  telemetry,
-  fuelStates,
-  rangeFor,
-  stations,
-  recommendation,
-  diagnosticEvents,
-  route,
-  type FuelState,
-  type Station,
-} from "@/lib/mock-data";
-
-type Inspection = "health" | "efficiency" | "journey" | "stops" | null;
-
+  demoDataset,
+  demoStations,
+  formatDemoTime,
+  formatDuration,
+} from "@/lib/integration/snapshot";
+import type { FuelStation } from "@/lib/fuel/types";
+import type { PlaybackSpeed } from "@/lib/telemetry/types";
+type Inspection =
+  | "health"
+  | "efficiency"
+  | "journey"
+  | "stops"
+  | "fuel"
+  | "intelligence"
+  | null;
+const number = (value: number | null | undefined, digits = 1) =>
+  value == null ? "—" : value.toFixed(digits);
 function InspectionDialog({
   title,
   onClose,
@@ -82,15 +85,30 @@ function InspectionDialog({
 }
 
 export default function Dashboard() {
-  const opener = useRef<HTMLElement | null>(null);
-  const [fuelState, setFuelState] = useState<FuelState>("normal");
-  const [station, setStation] = useState<Station | null>(null);
+  const app = useIntegratedVehicle();
+  const { snapshot, playback, intelligence } = app;
+  const {
+    currentTelemetry: telemetry,
+    fuel,
+    health,
+    route,
+    vehicle,
+  } = snapshot;
+  const recommended = app.selectedStop;
+  const recommendation = recommended?.station ?? null;
+  const opener = useRef<HTMLElement | SVGElement | null>(null);
+  const [station, setStation] = useState<FuelStation | null>(null);
   const [inspection, setInspection] = useState<Inspection>(null);
   const [details, setDetails] = useState(false);
-  const [speed, setSpeed] = useState("1");
-  const state = fuelStates[fuelState];
-  const range = rangeFor(state.percent);
-  const progress = Math.round((route.elapsedMiles / route.totalMiles) * 100);
+  const progress = Math.round(snapshot.progress * 100);
+  const fuelState = fuel.status.fuelStatus.toLowerCase();
+  const selected = fuel.recommendation.assessments.find(
+    (s) => s.station.id === station?.id,
+  );
+  const topInsight =
+    intelligence.result.insights.find(
+      (i) => i.id === intelligence.result.topPriority,
+    ) ?? intelligence.result.insights[0];
   const close = () => {
     setStation(null);
     setInspection(null);
@@ -100,18 +118,26 @@ export default function Dashboard() {
   };
   const openInspection = (next: Inspection, trigger: HTMLElement) => {
     opener.current = trigger;
+    setStation(null);
     setInspection(next);
   };
-  const openStation = (next: Station, trigger: HTMLElement) => {
+  const openStation = (
+    next: FuelStation,
+    trigger: HTMLElement | SVGElement,
+  ) => {
     if (!trigger.closest("dialog")) opener.current = trigger;
     setInspection(null);
     setStation(next);
   };
-  const cycleFuel = () =>
-    setFuelState((current) =>
-      current === "normal" ? "low" : current === "low" ? "critical" : "normal",
-    );
-
+  const healthTitle = health.activeCodes.length
+    ? `${health.activeCodes.join(", ")} needs evaluation`
+    : health.overallStatus === "HIGH"
+      ? "Coolant needs attention"
+      : health.overallStatus === "WARNING"
+        ? "Review coolant warning"
+        : health.overallStatus === "UNKNOWN"
+          ? "Health data incomplete"
+          : "No active code observed";
   return (
     <div className={`cockpit fuel-${fuelState}`}>
       <a className="skip-link" href="#instruments">
@@ -128,15 +154,16 @@ export default function Dashboard() {
         />
         <div
           className="journey-track"
-          aria-label={`${progress}% of the demo journey completed`}
+          aria-label={`${progress}% of the synthetic journey completed`}
         >
           <div>
-            <span>{route.origin}</span>
+            <span>San Antonio</span>
             <span className="track-distance">
-              {route.elapsedMiles} / {route.totalMiles} mi
+              {number(route.currentDistanceAlongRouteMiles)} /{" "}
+              {number(snapshot.totalMiles)} mi
             </span>
             <strong>
-              {route.destination} <Flag size={12} />
+              Austin <Flag size={12} />
             </strong>
           </div>
           <div className="journey-progress">
@@ -146,21 +173,25 @@ export default function Dashboard() {
         </div>
         <div className="hud-session">
           <span className="demo-label">
-            <i /> SIMULATED RUN
+            <i /> SYNTHETIC REPLAY
           </span>
           <button
             className="icon-button"
-            onClick={(event) => openInspection("journey", event.currentTarget)}
+            onClick={(e) => openInspection("journey", e.currentTarget)}
             aria-label="Journey information and demo settings"
           >
             <Settings2 size={19} />
           </button>
         </div>
       </header>
-
       <main className="playfield" aria-label="Driving cockpit">
         <div className="route-scene">
-          <RouteMap onStation={openStation} />
+          <RouteMap
+            onStation={openStation}
+            telemetry={telemetry}
+            stations={demoStations}
+            recommendedId={recommendation?.id ?? null}
+          />
         </div>
         <div className="run-heading">
           <h1>
@@ -168,99 +199,131 @@ export default function Dashboard() {
           </h1>
           <p>
             <Navigation size={13} /> I-35 North <span>·</span>{" "}
-            {route.remainingMiles} miles to go
+            {number(route.remainingRouteMiles)} modeled miles to go
           </p>
         </div>
         <div className="arrival-readout">
-          <span>DESTINATION ETA</span>
-          <strong>{route.arrival}</strong>
-          <p>{route.remainingMinutes} min remaining</p>
+          <span>DEMO ARRIVAL</span>
+          <strong>
+            {formatDemoTime(demoDataset.records.at(-1)!.timestamp)}
+          </strong>
+          <p>{Math.ceil(snapshot.remainingMinutes)} min remaining</p>
         </div>
-
         <section className="checkpoint" aria-labelledby="checkpoint-title">
           <div className="checkpoint-title">
             <span className="checkpoint-symbol">
               <Fuel size={18} />
             </span>
-            <h2 id="checkpoint-title">Next checkpoint</h2>
-            <span className="suggested">DEMO PICK</span>
+            <h2 id="checkpoint-title">
+              {recommendation ? "Next checkpoint" : "No reachable stop"}
+            </h2>
+            <span className="suggested">
+              {intelligence.result.source === "gemma4"
+                ? "GEMMA + M3"
+                : "M3 · DEMO"}
+            </span>
           </div>
-          <h3>{stations[0].name}</h3>
-          <p className="checkpoint-area">{stations[0].area}</p>
+          <h3>{recommendation?.name ?? "No confirmed reachable station"}</h3>
+          <p className="checkpoint-area">
+            {recommendation
+              ? "Fictional diesel stop · modeled detour"
+              : fuel.status.recommendedAction}
+          </p>
           <div className="checkpoint-stats">
             <div>
               <strong>
-                {stations[0].distance}
+                {number(recommended?.reachability.routeDistanceMiles)}
                 <small> mi</small>
               </strong>
-              <span>ahead</span>
+              <span>along route</span>
             </div>
             <div>
               <strong>
-                +{stations[0].detour}
-                <small> min</small>
+                +{number(recommendation?.detourMiles)}
+                <small> mi</small>
               </strong>
-              <span>detour</span>
+              <span>full detour</span>
             </div>
             <div>
-              <strong>${stations[0].price.toFixed(2)}</strong>
-              <span>diesel / gal</span>
+              <strong>
+                {recommendation?.pricePerGallon == null
+                  ? "—"
+                  : `$${recommendation.pricePerGallon.toFixed(2)}`}
+              </strong>
+              <span>sample / gal</span>
             </div>
           </div>
           <p className="checkpoint-reason">
-            <Check size={13} /> Low sample price. Short detour.
+            <Check size={13} />
+            {fuel.status.routeSafety === "INSUFFICIENT_RANGE"
+              ? "Destination exceeds usable range"
+              : fuel.status.title}
           </p>
           <button
             className="primary-button"
-            onClick={(event) => openStation(stations[0], event.currentTarget)}
+            onClick={(e) =>
+              recommendation
+                ? openStation(recommendation, e.currentTarget)
+                : openInspection("fuel", e.currentTarget)
+            }
           >
-            Inspect fuel stop <ArrowUpRight size={16} />
+            {recommendation ? "Inspect fuel stop" : "Review fuel warning"}
+            <ArrowUpRight size={16} />
           </button>
           <button
             className="other-stops"
-            onClick={(event) => openInspection("stops", event.currentTarget)}
+            onClick={(e) => openInspection("stops", e.currentTarget)}
           >
-            2 alternative stops <ArrowRight size={13} />
+            {fuel.recommendation.alternatives.length} eligible alternatives{" "}
+            <ArrowRight size={13} />
           </button>
         </section>
-
         <div className="vehicle-comms">
           <button
-            className="comms-button caution-comms"
-            onClick={(event) => openInspection("health", event.currentTarget)}
+            className={`comms-button ${health.overallStatus === "HIGH" || health.overallStatus === "WARNING" ? "caution-comms" : ""}`}
+            onClick={(e) => openInspection("health", e.currentTarget)}
           >
             <span className="comms-icon">
               <Activity size={19} />
             </span>
             <span>
-              <strong>Engine needs attention</strong>
-              <small>P0301 · illustrative caution</small>
+              <strong>{healthTitle}</strong>
+              <small>
+                {health.overallStatus} · {health.recentEvents.length} observed
+                episodes
+              </small>
             </span>
             <ChevronRight size={17} />
           </button>
           <button
             className="comms-button efficiency-comms"
-            onClick={(event) => openInspection("efficiency", event.currentTarget)}
+            onClick={(e) => openInspection("intelligence", e.currentTarget)}
           >
             <span className="comms-icon">
               <Sparkles size={18} />
             </span>
             <span>
-              <strong>Find your driving rhythm</strong>
-              <small>8.0 MPG · simulated insights</small>
+              <strong>Vehicle intelligence</strong>
+              <small>
+                {intelligence.result.source === "gemma4"
+                  ? "Gemma 4 reasoning"
+                  : intelligence.checking
+                    ? "Fallback · checking AI availability"
+                    : "Deterministic fallback"}{" "}
+                · {topInsight?.priority ?? "unknown"}
+              </small>
             </span>
             <ChevronRight size={17} />
           </button>
         </div>
         <div className="map-caption">
           <span className="route-key" /> Planned route{" "}
-          <span className="vehicle-key" /> Your truck{" "}
+          <span className="vehicle-key" /> Synthetic GPS{" "}
           <span className="schematic-label">
             SCHEMATIC · FICTIONAL STATIONS
           </span>
         </div>
       </main>
-
       <section
         className="instrument-deck"
         id="instruments"
@@ -269,8 +332,8 @@ export default function Dashboard() {
       >
         <button
           className="fuel-instrument"
-          onClick={cycleFuel}
-          aria-label={`Fuel preview: ${fuelState}. Switch to ${fuelState === "normal" ? "low" : fuelState === "low" ? "critical" : "normal"} fuel.`}
+          onClick={(e) => openInspection("fuel", e.currentTarget)}
+          aria-label="Fuel intelligence details"
         >
           <div className="fuel-dial">
             <svg viewBox="0 0 100 100" aria-hidden="true">
@@ -280,44 +343,45 @@ export default function Dashboard() {
                 cy="50"
                 r="42"
                 className="dial-level"
-                strokeDasharray={`${state.percent * 2.639} 264`}
+                strokeDasharray={`${telemetry.fuel_percent * 2.639} 264`}
               />
             </svg>
             <div>
               <strong>
-                {state.percent}
+                {number(telemetry.fuel_percent, 1)}
                 <small>%</small>
               </strong>
               <Fuel size={12} />
             </div>
           </div>
           <div className="fuel-reading">
-            <span>FUEL RESERVE</span>
+            <span>FUEL REMAINING</span>
             <strong>
-              {((vehicle.tankGallons * state.percent) / 100).toFixed(1)}{" "}
-              <small>/ 120 gal</small>
+              {number(fuel.fuel.remainingGallons)}{" "}
+              <small>/ {vehicle.tank_capacity_gallons} gal</small>
             </strong>
-            <p className="fuel-status-label">{state.label}</p>
+            <p className="fuel-status-label">
+              {fuel.status.fuelStatus} ·{" "}
+              {fuel.status.routeSafety === "INSUFFICIENT_RANGE"
+                ? "route shortfall"
+                : "route " + fuel.status.routeSafety.toLowerCase()}
+            </p>
             <small className="preview-cycle">
-              <RotateCcw size={10} /> Cycle demo state
+              <CircleHelp size={10} /> Fuel & reserve details
             </small>
           </div>
         </button>
         <div className="speed-instrument">
           <div className="speed-ticks" aria-hidden="true">
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
-            <span />
+            {Array.from({ length: 7 }, (_, i) => (
+              <span key={i} />
+            ))}
           </div>
           <strong>
-            {telemetry.speed}
+            {number(telemetry.speed_mph, 0)}
             <span>MPH</span>
           </strong>
-          <p>SIMULATED SPEED</p>
+          <p>SYNTHETIC SPEED</p>
         </div>
         <div className="instrument">
           <span>
@@ -327,144 +391,224 @@ export default function Dashboard() {
             {telemetry.rpm.toLocaleString("en-US")}
             <small> rpm</small>
           </strong>
-          <p>Within demo band</p>
+          <p>Observed sample</p>
         </div>
-        <div className="instrument range-instrument" aria-live="polite">
+        <div className="instrument range-instrument">
           <span>
-            <Navigation size={13} /> RANGE ESTIMATE
+            <Navigation size={13} /> USABLE RANGE
           </span>
           <strong>
-            {range.toFixed(1)}
+            {number(fuel.fuel.usableRangeMiles)}
             <small> mi</small>
           </strong>
-          <p>No reserve included</p>
+          <p>
+            Raw {number(fuel.fuel.estimatedRangeMiles)} mi ·{" "}
+            {fuel.fuel.reservePercent}% reserve
+          </p>
         </div>
         <div className="instrument">
           <span>
-            <Gauge size={13} /> TRIP ECONOMY
+            <Gauge size={13} /> CURRENT ECONOMY
           </span>
           <strong>
-            {telemetry.mpg.toFixed(1)}
+            {number(telemetry.mpg)}
             <small> MPG</small>
           </strong>
-          <p>Current & average</p>
+          <p>Trip avg {number(snapshot.averageMpg)}</p>
         </div>
         <div className="instrument temperature-instrument">
           <span>
             <Thermometer size={13} /> COOLANT
           </span>
           <strong>
-            {telemetry.temperature}
+            {number(telemetry.coolant_temp_f, 0)}
             <small> °F</small>
           </strong>
-          <p>180–220°F demo band</p>
+          <p>{health.coolantStatus} · demo thresholds</p>
         </div>
       </section>
-
       <footer className="replay-bar">
         <div className="replay-label">
           <span className="replay-dot" />
           <strong>Dataset replay</strong>
-          <span>Preview only</span>
+          <span>
+            {playback.status} · {playback.index + 1}/{playback.total}
+          </span>
         </div>
         <div className="replay-controls">
-          <button disabled aria-label="Play preview unavailable">
+          <button
+            disabled={
+              playback.status === "playing" || playback.status === "ended"
+            }
+            onClick={app.play}
+            aria-label="Play telemetry"
+          >
             <Play size={15} />
           </button>
-          <button disabled aria-label="Pause preview unavailable">
+          <button
+            disabled={playback.status !== "playing"}
+            onClick={app.pause}
+            aria-label="Pause telemetry"
+          >
             <Pause size={15} />
           </button>
-          <button disabled aria-label="Reset preview unavailable">
+          <button onClick={app.reset} aria-label="Reset telemetry">
             <RotateCcw size={14} />
           </button>
         </div>
         <div className="replay-timeline">
-          <div>
-            <span />
-          </div>
+          <input
+            type="range"
+            min="0"
+            max={playback.total - 1}
+            step="1"
+            value={playback.index}
+            onChange={(e) => app.seekTo(Number(e.target.value))}
+            aria-label="Seek telemetry reading"
+            aria-valuetext={`Reading ${playback.index + 1} of ${playback.total}, ${formatDemoTime(telemetry.timestamp)}`}
+          />
           <span>
-            00:24:36 <small>/ 01:22:00</small>
+            {formatDuration(playback.elapsed_ms)}{" "}
+            <small>/ {formatDuration(playback.duration_ms)}</small>
           </span>
         </div>
         <label className="replay-speed">
-          <span>Preview speed</span>
+          <span>Replay speed</span>
           <select
-            value={speed}
-            onChange={(e) => setSpeed(e.target.value)}
-            aria-label="Preview playback speed"
+            value={String(playback.speed)}
+            onChange={(e) =>
+              app.setPlaybackSpeed(Number(e.target.value) as PlaybackSpeed)
+            }
+            aria-label="Playback speed"
           >
             <option value="1">1×</option>
             <option value="2">2×</option>
             <option value="5">5×</option>
           </select>
         </label>
-        <span className="replay-source">Mock fixture · no dataset loaded</span>
+        <span className="replay-source">
+          Synthetic M2 · {formatDemoTime(telemetry.timestamp)}
+        </span>
         <button
           className="icon-button replay-help"
-          aria-label="About this simulated run"
-          onClick={(event) => openInspection("journey", event.currentTarget)}
+          aria-label="About this synthetic run"
+          onClick={(e) => openInspection("journey", e.currentTarget)}
         >
           <CircleHelp size={17} />
         </button>
       </footer>
-
       {station && (
         <InspectionDialog title={station.name} onClose={close}>
-          <span className="detail-tag">FICTIONAL DEMO STATION</span>
-          <p>{station.area}</p>
+          <span className="detail-tag">
+            FICTIONAL DEMO STATION · {selected?.status ?? "UNKNOWN"}
+          </span>
+          <p>
+            {selected?.explanation ??
+              "Reachability is unavailable for this reading."}
+          </p>
           <div className="station-detail-stats">
             <strong>
-              ${station.price.toFixed(2)}
-              <small>per gallon · sample diesel price</small>
+              {station.pricePerGallon == null
+                ? "Unknown"
+                : `$${station.pricePerGallon.toFixed(2)}`}
+              <small>per gallon · fictional diesel price</small>
             </strong>
             <div>
-              <b>{station.distance} mi</b>
-              <span>ahead</span>
+              <b>{number(selected?.routeDistanceMiles)} mi</b>
+              <span>along route</span>
             </div>
             <div>
-              <b>+{station.detour} min</b>
-              <span>detour</span>
+              <b>+{number(station.detourMiles)} mi</b>
+              <span>modeled full detour</span>
             </div>
           </div>
           <div className="explanation">
             <Sparkles size={18} />
             <p>
-              {station.id === recommendation.stationId
-                ? recommendation.reason
-                : "Alternative fictional stop on the schematic route. Position and price are illustrative."}
+              {station.id === recommendation?.id
+                ? recommended?.explanation
+                : selected?.explanation}
             </p>
           </div>
           <p>
-            At {state.percent}% fuel, the {range.toFixed(1)}-mile estimate{" "}
-            {range >= station.distance ? "covers" : "does not cover"} this
-            stop’s displayed distance. No reserve or real-world conditions are
-            included.
+            Estimated arrival: {number(selected?.estimatedArrivalGallons)} gal (
+            {number(selected?.estimatedArrivalFuelPercent)}%). Planning uses{" "}
+            {fuel.fuel.planningMpg} MPG and a {fuel.fuel.reservePercent}%
+            reserve of total tank capacity. Estimates do not guarantee arrival.
           </p>
           <button className="primary-button" onClick={close}>
             Back to the run <ArrowRight size={16} />
           </button>
         </InspectionDialog>
       )}
+      {inspection === "fuel" && (
+        <InspectionDialog title="Fuel intelligence" onClose={close}>
+          <span className="detail-tag">
+            {fuel.status.fuelStatus} · {fuel.status.routeSafety}
+          </span>
+          <p>{fuel.status.explanation}</p>
+          <dl className="journey-facts">
+            <div>
+              <dt>Remaining gallons</dt>
+              <dd>{number(fuel.fuel.remainingGallons)} gal</dd>
+            </div>
+            <div>
+              <dt>Raw estimated range</dt>
+              <dd>{number(fuel.fuel.estimatedRangeMiles)} mi</dd>
+            </div>
+            <div>
+              <dt>Safety reserve</dt>
+              <dd>
+                {number(fuel.fuel.reserveGallons)} gal ·{" "}
+                {fuel.fuel.reservePercent}% of tank
+              </dd>
+            </div>
+            <div>
+              <dt>Usable planning range</dt>
+              <dd>{number(fuel.fuel.usableRangeMiles)} mi</dd>
+            </div>
+            <div>
+              <dt>Destination distance</dt>
+              <dd>{number(route.remainingRouteMiles)} modeled mi</dd>
+            </div>
+            <div>
+              <dt>Planning economy</dt>
+              <dd>{fuel.fuel.planningMpg} MPG · vehicle profile</dd>
+            </div>
+          </dl>
+          <p>{fuel.status.recommendedAction}</p>
+          <p>{fuel.recommendation.explanation}</p>
+          {fuel.recommendation.warnings.map((w) => (
+            <p key={w.code}>{w.explanation}</p>
+          ))}
+          <p className="fine-print">
+            Synthetic readings; fictional station prices and modeled full
+            detours. Road progress comes from the unchanged M2 speed/time model,
+            never GPS straight-line distance.
+          </p>
+        </InspectionDialog>
+      )}
       {inspection === "stops" && (
         <InspectionDialog title="Stops along your route" onClose={close}>
-          <p>
-            Fictional diesel stations. Static demo options; no ranking engine is
-            running.
-          </p>
+          <p>{fuel.recommendation.explanation}</p>
           <div className="stop-list">
-            {stations.map((s) => (
+            {fuel.recommendation.assessments.map((a) => (
               <button
-                key={s.id}
-                onClick={(event) => openStation(s, event.currentTarget)}
+                key={a.station.id}
+                onClick={(e) => openStation(a.station, e.currentTarget)}
               >
                 <Fuel size={18} />
                 <span>
-                  <strong>{s.name}</strong>
+                  <strong>{a.station.name}</strong>
                   <small>
-                    {s.distance} mi ahead · +{s.detour} min detour
+                    {a.status} · {number(a.routeDistanceMiles)} modeled mi ahead
                   </small>
                 </span>
-                <b>${s.price.toFixed(2)}</b>
+                <b>
+                  {a.station.pricePerGallon == null
+                    ? "—"
+                    : `$${a.station.pricePerGallon.toFixed(2)}`}
+                </b>
                 <ChevronRight size={15} />
               </button>
             ))}
@@ -476,16 +620,19 @@ export default function Dashboard() {
           <div className="health-brief">
             <TriangleAlert size={22} />
             <div>
-              <strong>P0301 · Cylinder 1 misfire signal</strong>
-              <p>Illustrative caution · not a confirmed diagnosis</p>
+              <strong>{healthTitle}</strong>
+              <p>{health.overallStatus} · educational interpretation</p>
             </div>
           </div>
+          <p>{health.explanation}</p>
           <p>
-            Engine coolant: {telemetry.temperature}°F. The 180–220°F band is a
-            demo assumption, not a universal vehicle limit.
+            Coolant {number(telemetry.coolant_temp_f)}°F: {health.coolantStatus}
+            . Demo thresholds: elevated {health.config.elevatedF}°F, critical{" "}
+            {health.config.criticalF}°F. Manufacturer limits vary.
           </p>
           <button
             className="outline-button"
+            disabled={!health.explanations.length}
             aria-expanded={details}
             aria-controls="diagnostic-details"
             onClick={() => setDetails(!details)}
@@ -495,43 +642,115 @@ export default function Dashboard() {
           </button>
           {details && (
             <div id="diagnostic-details" className="diagnostic-details">
-              <h3>What the code can mean</h3>
-              <p>
-                P0301 indicates an observed misfire associated with cylinder 1.
-                A code alone cannot establish the underlying cause.
-              </p>
-              <h3>Possible causes</h3>
-              <p>
-                Fuel delivery, injector wiring, or compression issues.
-                Spark-ignition vehicles may also have plug or coil faults.
-              </p>
-              <h3>Suggested next steps</h3>
-              <p>
-                Arrange professional inspection and consult vehicle-specific
-                service information. If the engine runs roughly, loses power, or
-                a warning light flashes, stop safely and seek assistance.
-              </p>
+              {health.explanations.map((e) => (
+                <div key={e.code}>
+                  <h3>
+                    {e.code} · {e.description} ({e.severity})
+                  </h3>
+                  <p>
+                    System: {e.system}. A code alone does not confirm a
+                    mechanical cause.
+                  </p>
+                  <h3>Possible causes</h3>
+                  <p>
+                    {e.possibleCauses.join(" ") ||
+                      "Unknown; consult vehicle-specific service information."}
+                  </p>
+                  <h3>Suggested next steps</h3>
+                  <p>
+                    {e.nextSteps.join(" ")} {e.safetyGuidance}
+                  </p>
+                </div>
+              ))}
             </div>
           )}
-          <h3 className="detail-subheading">Recent demo events</h3>
+          <h3 className="detail-subheading">
+            Observed episodes up to this reading
+          </h3>
           <div className="diagnostic-events">
-            {diagnosticEvents.map((e) => (
-              <div key={e.time}>
-                <i className={e.severity} />
-                <span>{e.title}</span>
-                <time>{e.time} AM</time>
-              </div>
-            ))}
+            {health.recentEvents.length ? (
+              health.recentEvents.map((e) => (
+                <div key={e.code + e.firstObserved}>
+                  <i className="caution" />
+                  <span>
+                    {e.code} ·{" "}
+                    {e.currentlyObserved ? "Currently" : "Previously"} observed
+                    <br />
+                    <small>
+                      First {formatDemoTime(e.firstObserved)} · Last{" "}
+                      {formatDemoTime(e.lastObserved)} · {e.readings} readings
+                    </small>
+                  </span>
+                </div>
+              ))
+            ) : (
+              <p>No diagnostic episodes observed in this playback prefix.</p>
+            )}
           </div>
           <p className="fine-print">
-            Static reference content only. No diagnostic engine or physical
-            OBD-II device is connected.
+            Synthetic dataset, simulated P0301, rule-based interpretation. No
+            physical OBD-II device. A disappearing code is not proof of repair.
           </p>
+        </InspectionDialog>
+      )}
+      {inspection === "intelligence" && (
+        <InspectionDialog title="Vehicle intelligence" onClose={close}>
+          <span className="detail-tag">
+            {intelligence.result.source === "gemma4"
+              ? "GEMMA 4 · LIVE REASONING"
+              : "DETERMINISTIC FALLBACK"}{" "}
+            · {intelligence.state}
+          </span>
+          <p>
+            {intelligence.available
+              ? "A server key and supported model are configured. Requests run on meaningful events; only validated responses are labeled Gemma reasoning."
+              : intelligence.checking
+                ? "Checking AI availability. Deterministic advice is active."
+                : "Gemma is unavailable or not configured. No live AI response is claimed."}
+          </p>
+          <h3 className="detail-subheading">Overall assessment</h3>
+          <p>{intelligence.result.overallAssessment}</p>
+          {intelligence.result.insights.map((i) => (
+            <div className="intelligence-insight" key={i.id}>
+              <h3>
+                {i.title} · {i.priority}
+              </h3>
+              <p>{i.explanation}</p>
+              <p>
+                <strong>Action:</strong> {i.recommendedAction}
+              </p>
+              <small>
+                {i.source} ·{" "}
+                {i.mandatory
+                  ? "mandatory deterministic warning"
+                  : "decision support"}
+              </small>
+            </div>
+          ))}
+          <p className="fine-print">
+            Reading {playback.index + 1} · {formatDemoTime(telemetry.timestamp)}
+            . Deterministic calculations and warnings remain authoritative. No
+            M5 efficiency engine is included.
+          </p>
+          {intelligence.available && (
+            <button className="outline-button" onClick={intelligence.refresh}>
+              Request current assessment
+            </button>
+          )}
+          <button
+            className="outline-button"
+            onClick={() => setInspection("efficiency")}
+          >
+            View M1 efficiency preview <ArrowRight size={15} />
+          </button>
         </InspectionDialog>
       )}
       {inspection === "efficiency" && (
         <InspectionDialog title="Your driving rhythm" onClose={close}>
-          <Efficiency />
+          <Efficiency
+            history={snapshot.history}
+            averageMpg={snapshot.averageMpg}
+          />
         </InspectionDialog>
       )}
       {inspection === "journey" && (
@@ -541,7 +760,8 @@ export default function Dashboard() {
             <div>
               <strong>{vehicle.name}</strong>
               <p>
-                {vehicle.id} · {vehicle.model}
+                {vehicle.tank_capacity_gallons} gal tank · diesel · profile{" "}
+                {vehicle.typical_mpg} MPG
               </p>
             </div>
           </div>
@@ -549,37 +769,63 @@ export default function Dashboard() {
             <div>
               <dt>Route progress</dt>
               <dd>
-                {route.elapsedMiles} / {route.totalMiles} miles · {progress}%
+                {number(route.currentDistanceAlongRouteMiles)} /{" "}
+                {number(snapshot.totalMiles)} modeled miles · {progress}%
               </dd>
             </div>
             <div>
               <dt>Trip</dt>
+              <dd>San Antonio → Austin</dd>
+            </div>
+            <div>
+              <dt>Position</dt>
               <dd>
-                {route.origin} → {route.destination}
+                {telemetry.latitude ?? "Unknown"},{" "}
+                {telemetry.longitude ?? "Unknown"} · synthetic GPS
               </dd>
             </div>
             <div>
-              <dt>Display</dt>
-              <dd>Dark · MPH · miles · US gallons</dd>
+              <dt>Reading</dt>
+              <dd>
+                {playback.index + 1}/{playback.total} · {telemetry.timestamp}
+              </dd>
             </div>
             <div>
-              <dt>Trip history</dt>
-              <dd>Saved trips available after dataset integration.</dd>
-            </div>
-            <div>
-              <dt>Data</dt>
-              <dd>Mock fixture · {telemetry.timestamp} snapshot</dd>
+              <dt>AI</dt>
+              <dd>
+                {intelligence.available
+                  ? "Gemma configured"
+                  : "Deterministic fallback"}
+              </dd>
             </div>
           </dl>
           <p>
-            {state.description} Fuel and range are simulated; all stations and
-            prices are fictional.
+            Synthetic 241-reading M2 dataset. Fictional M3 station prices and
+            modeled route/detours. Not live navigation or real vehicle
+            telemetry.
           </p>
-          <p className="fine-print">
-            The interface is a stationary demo, not live navigation. Replay
-            controls remain disabled until dataset integration. Drive Smarter.
-            Further.
-          </p>
+          <div className="scenario-controls">
+            <button
+              className="outline-button"
+              onClick={() => {
+                app.pause();
+                app.seekTo(160);
+                close();
+              }}
+            >
+              Seek to simulated P0301
+            </button>
+            <button
+              className="outline-button"
+              onClick={() => {
+                app.pause();
+                app.seekTo(240);
+                close();
+              }}
+            >
+              Seek to critical-fuel ending
+            </button>
+          </div>
         </InspectionDialog>
       )}
     </div>

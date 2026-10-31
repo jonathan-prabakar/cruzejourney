@@ -1,0 +1,17 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "noEmit": false,
+    "declaration": true,
+    "incremental": false
+  },
+  "include": [
+    "src/lib/**/*.ts",
+    "src/hooks/**/*.ts",
+    "src/data/**/*.json"
+  ],
+  "exclude": [
+    "src/**/__tests__/**"
+  ]
+}

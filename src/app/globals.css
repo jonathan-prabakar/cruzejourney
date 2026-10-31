@@ -1955,3 +1955,25 @@ select {
     animation: none !important;
   }
 }
+/* Shared playback wiring retains the M1 cockpit geometry. */
+.replay-timeline input[type="range"] { display:block; width:100%; margin:0; height:10px; accent-color:var(--blue); cursor:pointer; }
+.replay-timeline input[type="range"]:focus-visible { outline:2px solid var(--teal); outline-offset:3px; }
+.station-marker { cursor:pointer; color:#a8d3ff; }
+.station-marker rect { fill:#172c41; stroke:#496781; stroke-width:1; }
+.station-marker:hover rect, .station-marker:focus rect { stroke:var(--teal); stroke-width:2; }
+.recommended-marker { color:#66f0d3; }
+.recommended-marker rect { fill:#073b37; stroke:#00b292; }
+.checkpoint-area { display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.fuel-status-label { max-width:150px; }
+.intelligence-insight { margin:16px 0; padding:15px 0; border-top:1px solid var(--border); }
+.intelligence-insight h3 { font-size:13px; margin-bottom:8px; }
+.intelligence-insight p { font-size:11px; line-height:1.8; margin:7px 0; }
+.intelligence-insight small { color:var(--secondary); font-size:9px; }
+.scenario-controls { display:flex; gap:10px; flex-wrap:wrap; }
+.inspection-content>.outline-button { margin-top:14px; }
+@media(max-width:760px) { .fuel-dial strong { font-size:22px; } .instrument>span { white-space:normal; } .replay-speed select { min-width:38px; } }
+.replay-timeline input[type="range"] { appearance:none; background:transparent; }
+.replay-timeline input[type="range"]::-webkit-slider-runnable-track { height:3px; background:#28374a; border-radius:3px; }
+.replay-timeline input[type="range"]::-webkit-slider-thumb { appearance:none; width:11px; height:11px; margin-top:-4px; border-radius:50%; background:var(--blue); }
+.replay-timeline input[type="range"]::-moz-range-track { height:3px; background:#28374a; border-radius:3px; }
+.replay-timeline input[type="range"]::-moz-range-thumb { width:11px; height:11px; border:0; border-radius:50%; background:var(--blue); }
