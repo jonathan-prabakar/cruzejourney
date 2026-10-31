@@ -103,6 +103,7 @@ export function prepareIntelligenceContext(input: VehicleIntelligenceContext): P
     'Range uses configured/profile MPG and an explicit reserve; future economy can differ.',
     'Full modeled detours are charged before arrival; no live routing or price verification.',
     ...(input.demoMode ? ['Dataset demo mode: telemetry is synthetic.'] : []),
+    ...(input.stations.some(s => !s.isSynthetic) ? ['Mapped station locations are not live verification of operation, opening hours, fuel stock or truck access. Missing prices are unknown. Driving routes are not truck-restriction-aware.'] : []),
     ...(input.stations.some(s => s.isSynthetic || s.priceSource === 'sample') ? ['Stations or prices include fictional demonstration values.'] : []),
     ...(capabilities.diagnostics === 'observations-only' ? ['M4 diagnostic adapter is unavailable; raw code observations only.'] : []),
     ...(!efficiency ? ['M5 efficiency capability is unavailable; no efficiency findings are invented.'] : []),

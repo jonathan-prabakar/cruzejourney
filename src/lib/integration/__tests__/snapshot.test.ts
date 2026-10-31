@@ -24,7 +24,9 @@ describe("application integration snapshot", () => {
     expect(html).toContain("Driving cockpit");
     expect(html).toContain("28");
     expect(html).toContain("163.2");
-    expect(html).toContain("Guadalupe Demo Truck Stop");
+    expect(html).toContain("OSM STATIONS");
+    expect(html).not.toContain("FICTIONAL STATIONS");
+    expect(html).toContain("Destination");
     expect(html).not.toContain("Bluebonnet Travel Stop");
   });
   it("calculates the initial fuel and reserve from current telemetry", () => {

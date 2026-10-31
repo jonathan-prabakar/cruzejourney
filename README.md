@@ -9,7 +9,7 @@ npm install
 npm run dev
 ```
 
-Open http://localhost:3000. Use Node.js 24 (the test tooling also supports Node 22.19+).
+Open http://localhost:3000. Select Austin, Dallas, Houston or El Paso in the destination control. No map API key is required. Use Node.js 24 (the test tooling also supports Node 22.19+).
 
 ```sh
 npm run build
@@ -17,7 +17,7 @@ npm run typecheck
 npm run lint
 ```
 
-See IMPLEMENTATION_PLAN.md for architecture, design tokens, sample calculations and the remaining milestones. Telemetry is synthetic; stations, prices and route geometry are demonstration data. Playback is functional. Gemma uses deterministic fallback without a server key.
+See IMPLEMENTATION_PLAN.md for architecture, design tokens, sample calculations and the remaining milestones. Telemetry is synthetic. The active map uses MapLibre, OpenFreeMap tiles, cached OSRM road routes and mapped OpenStreetMap fuel stations. Fuel prices and live operating status are unknown. Playback is functional. Gemma uses deterministic fallback without a server key.
 
 ## Project references
 
@@ -35,3 +35,7 @@ The primary scene fits the viewport without page scrolling at the tested desktop
 See [INTEGRATION_REPORT.md](INTEGRATION_REPORT.md) for exact source commits, reconciled configuration, test results and limitations. One shared M2 provider drives all current measurements, M3 fuel recommendations and prefix-derived diagnostic episodes. The active UI no longer uses the M1 telemetry/station mocks. M1 comparison scenarios remain explicitly illustrative; no M5 engine is implemented.
 
 For optional Gemma reasoning: copy `.env.example` to `.env.local`, set the server-only `GEMINI_API_KEY` and `GEMMA_MODEL`, then restart Next.js. Without a key, every deterministic feature and playback still works. A live Gemma response has not been verified in this integration.
+
+## Real road maps
+
+The active cockpit follows cached real road geometry with simulated vehicle readings. Use **3D/2D**, **Follow**, and **Route** on the map. Buildings appear at close zoom where map data exists. Real stations are selectable from pins and the accessible stop list. Map tiles require internet access; route and station records are bundled. See [real-map implementation](docs/REAL_WORLD_MAPS.md) for provenance, refresh commands and limitations.

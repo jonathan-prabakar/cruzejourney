@@ -1,4 +1,5 @@
 "use client";
+import { demoRoutes, routeIds, type DemoRouteId } from "@/lib/integration/routes";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import {
@@ -26,8 +27,6 @@ import RouteMap from "./route-map";
 import Efficiency from "./efficiency";
 import { useIntegratedVehicle } from "@/hooks/useIntegratedVehicle";
 import {
-  demoDataset,
-  demoStations,
   formatDemoTime,
   formatDuration,
 } from "@/lib/integration/snapshot";
@@ -85,7 +84,11 @@ function InspectionDialog({
 }
 
 export default function Dashboard() {
-  const app = useIntegratedVehicle();
+  const [routeId, setRouteId] = useState<DemoRouteId>("austin");
+  return <DrivingSession key={routeId} routeId={routeId} onRouteChange={setRouteId} />;
+}
+function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRouteChange: (id: DemoRouteId) => void }) {
+  const app = useIntegratedVehicle(routeId, true);
   const { snapshot, playback, intelligence } = app;
   const {
     currentTelemetry: telemetry,
@@ -163,7 +166,9 @@ export default function Dashboard() {
               {number(snapshot.totalMiles)} mi
             </span>
             <strong>
-              Austin <Flag size={12} />
+              <select aria-label="Destination" className="destination-select" value={routeId} onChange={event => onRouteChange(event.target.value as DemoRouteId)}>
+                {routeIds.map(id => <option key={id} value={id}>{demoRoutes[id].destination}</option>)}
+              </select> <Flag size={12} />
             </strong>
           </div>
           <div className="journey-progress">
@@ -189,23 +194,24 @@ export default function Dashboard() {
           <RouteMap
             onStation={openStation}
             telemetry={telemetry}
-            stations={demoStations}
+            stations={snapshot.stations}
+            routeId={routeId}
             recommendedId={recommendation?.id ?? null}
           />
         </div>
         <div className="run-heading">
           <h1>
-            The Austin run<span>.</span>
+            The {snapshot.definition.destination} run<span>.</span>
           </h1>
           <p>
-            <Navigation size={13} /> I-35 North <span>·</span>{" "}
-            {number(route.remainingRouteMiles)} modeled miles to go
+            <Navigation size={13} /> {snapshot.definition.corridor} <span>·</span>{" "}
+            {number(route.remainingRouteMiles)} road miles to go
           </p>
         </div>
         <div className="arrival-readout">
-          <span>DEMO ARRIVAL</span>
+          <span>REPLAY ARRIVAL · CT</span>
           <strong>
-            {formatDemoTime(demoDataset.records.at(-1)!.timestamp)}
+            {formatDemoTime(snapshot.dataset.records.at(-1)!.timestamp)}
           </strong>
           <p>{Math.ceil(snapshot.remainingMinutes)} min remaining</p>
         </div>
@@ -220,13 +226,13 @@ export default function Dashboard() {
             <span className="suggested">
               {intelligence.result.source === "gemma4"
                 ? "GEMMA + M3"
-                : "M3 · DEMO"}
+                : "FUEL MODEL"}
             </span>
           </div>
-          <h3>{recommendation?.name ?? "No confirmed reachable station"}</h3>
+          <h3>{recommendation?.name ?? "No eligible mapped stop"}</h3>
           <p className="checkpoint-area">
             {recommendation
-              ? "Fictional diesel stop · modeled detour"
+              ? "Mapped diesel stop · routed access"
               : fuel.status.recommendedAction}
           </p>
           <div className="checkpoint-stats">
@@ -242,7 +248,7 @@ export default function Dashboard() {
                 +{number(recommendation?.detourMiles)}
                 <small> mi</small>
               </strong>
-              <span>full detour</span>
+              <span>access allowance</span>
             </div>
             <div>
               <strong>
@@ -250,7 +256,7 @@ export default function Dashboard() {
                   ? "—"
                   : `$${recommendation.pricePerGallon.toFixed(2)}`}
               </strong>
-              <span>sample / gal</span>
+              <span>price unknown</span>
             </div>
           </div>
           <p className="checkpoint-reason">
@@ -318,9 +324,9 @@ export default function Dashboard() {
         </div>
         <div className="map-caption">
           <span className="route-key" /> Planned route{" "}
-          <span className="vehicle-key" /> Synthetic GPS{" "}
+          <span className="vehicle-key" /> Simulated vehicle{" "}
           <span className="schematic-label">
-            SCHEMATIC · FICTIONAL STATIONS
+            OSM STATIONS · SIMULATED DRIVE
           </span>
         </div>
       </main>
@@ -500,8 +506,9 @@ export default function Dashboard() {
       {station && (
         <InspectionDialog title={station.name} onClose={close}>
           <span className="detail-tag">
-            FICTIONAL DEMO STATION · {selected?.status ?? "UNKNOWN"}
+            OPENSTREETMAP STATION · {selected?.status ?? "UNKNOWN"}
           </span>
+          <p className="fine-print">Mapped location; current operation, hours and fuel stock are unverified. Diesel: {station.fuelTypes.includes("diesel") ? "listed in OSM" : "unknown"}. Truck access: {station.truckAccess ?? "unknown"}. No live fuel prices.</p>
           <p>
             {selected?.explanation ??
               "Reachability is unavailable for this reading."}
@@ -511,7 +518,7 @@ export default function Dashboard() {
               {station.pricePerGallon == null
                 ? "Unknown"
                 : `$${station.pricePerGallon.toFixed(2)}`}
-              <small>per gallon · fictional diesel price</small>
+              <small>per gallon · no live price feed</small>
             </strong>
             <div>
               <b>{number(selected?.routeDistanceMiles)} mi</b>
@@ -519,7 +526,7 @@ export default function Dashboard() {
             </div>
             <div>
               <b>+{number(station.detourMiles)} mi</b>
-              <span>modeled full detour</span>
+              <span>routed access allowance</span>
             </div>
           </div>
           <div className="explanation">
@@ -536,6 +543,7 @@ export default function Dashboard() {
             {fuel.fuel.planningMpg} MPG and a {fuel.fuel.reservePercent}%
             reserve of total tank capacity. Estimates do not guarantee arrival.
           </p>
+          <a className="outline-button" href={`https://www.openstreetmap.org/${station.id.replace("osm-", "").replace("-", "/")}`} target="_blank" rel="noreferrer">View source on OpenStreetMap</a>
           <button className="primary-button" onClick={close}>
             Back to the run <ArrowRight size={16} />
           </button>
@@ -569,7 +577,7 @@ export default function Dashboard() {
             </div>
             <div>
               <dt>Destination distance</dt>
-              <dd>{number(route.remainingRouteMiles)} modeled mi</dd>
+              <dd>{number(route.remainingRouteMiles)} road mi</dd>
             </div>
             <div>
               <dt>Planning economy</dt>
@@ -582,9 +590,7 @@ export default function Dashboard() {
             <p key={w.code}>{w.explanation}</p>
           ))}
           <p className="fine-print">
-            Synthetic readings; fictional station prices and modeled full
-            detours. Road progress comes from the unchanged M2 speed/time model,
-            never GPS straight-line distance.
+            Simulated vehicle readings on cached road routes. Station locations are mapped in OpenStreetMap; prices, opening status, diesel stock and truck access are not live verified. The entire routed local access loop is charged before arrival as a conservative allowance. Routes use a driving profile, not truck-specific navigation.
           </p>
         </InspectionDialog>
       )}
@@ -601,7 +607,7 @@ export default function Dashboard() {
                 <span>
                   <strong>{a.station.name}</strong>
                   <small>
-                    {a.status} · {number(a.routeDistanceMiles)} modeled mi ahead
+                    {a.status} · {number(a.routeDistanceMiles)} road mi ahead
                   </small>
                 </span>
                 <b>
@@ -750,6 +756,8 @@ export default function Dashboard() {
           <Efficiency
             history={snapshot.history}
             averageMpg={snapshot.averageMpg}
+            initialFuelPercent={snapshot.dataset.records[0].fuel_percent}
+            tankCapacity={vehicle.tank_capacity_gallons}
           />
         </InspectionDialog>
       )}
@@ -770,18 +778,18 @@ export default function Dashboard() {
               <dt>Route progress</dt>
               <dd>
                 {number(route.currentDistanceAlongRouteMiles)} /{" "}
-                {number(snapshot.totalMiles)} modeled miles · {progress}%
+                {number(snapshot.totalMiles)} road miles · {progress}%
               </dd>
             </div>
             <div>
               <dt>Trip</dt>
-              <dd>San Antonio → Austin</dd>
+              <dd>San Antonio → {snapshot.definition.destination}</dd>
             </div>
             <div>
               <dt>Position</dt>
               <dd>
                 {telemetry.latitude ?? "Unknown"},{" "}
-                {telemetry.longitude ?? "Unknown"} · synthetic GPS
+                {telemetry.longitude ?? "Unknown"} · simulated road position
               </dd>
             </div>
             <div>
@@ -800,9 +808,7 @@ export default function Dashboard() {
             </div>
           </dl>
           <p>
-            Synthetic 241-reading M2 dataset. Fictional M3 station prices and
-            modeled route/detours. Not live navigation or real vehicle
-            telemetry.
+            241 simulated vehicle readings on real road geometry, with cached OpenStreetMap fuel stations. Mileage is routing-engine derived; travel time and fuel consumption are estimates. No live navigation, traffic or vehicle connection. Opening status and truck suitability are unverified.
           </p>
           <div className="scenario-controls">
             <button

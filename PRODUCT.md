@@ -41,3 +41,7 @@ Keyboard controls, visible focus, responsive layouts, reduced motion, readable c
 ## Current interface commitment
 
 The user explicitly requested a fixed, lightly gamified driving interface with no sidebar or tabs. Preserve existing functionality and brand assets while presenting the primary experience as one cockpit. Long explanations remain accessible through detail inspections. The attached M4 diagnostic-engine prompt is separate context; this UI task does not implement or merge that engine.
+
+## Real-road simulation
+
+The real-map branch adds four San Antonio departures: Austin, Dallas, Houston and El Paso. MapLibre/OpenFreeMap render real roads and available 3D buildings. Cached OSRM driving routes and OpenStreetMap station snapshots support the simulation; vehicle readings, fuel consumption, diagnostics and driving progress remain simulated. This is not live traffic, live station availability, truck routing or live fuel pricing.

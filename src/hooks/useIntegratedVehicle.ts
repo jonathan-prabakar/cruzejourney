@@ -1,9 +1,10 @@
 "use client";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useVehicleTelemetry } from "./useVehicleTelemetry";
-import { createDemoTelemetryProvider } from "../lib/telemetry/provider";
+import { TelemetryPlayback } from "../lib/telemetry/playback";
+import { roadRoutes } from "../lib/integration/road-routes";
+import { demoRoutes, type DemoRouteId } from "../lib/integration/routes";
 import {
-  demoDataset,
   getDemoSnapshot,
   selectFeasibleRecommendation,
 } from "../lib/integration/snapshot";
@@ -14,15 +15,24 @@ import {
 } from "../lib/intelligence";
 import type { VehicleIntelligenceResult } from "../lib/intelligence/types";
 
-const recordIndices = new Map(
-  demoDataset.records.map((r, i) => [r.timestamp, i]),
-);
-export function useIntegratedVehicle() {
-  const [provider] = useState(() => createDemoTelemetryProvider());
+export function useIntegratedVehicle(
+  routeId: DemoRouteId = "austin",
+  roadMode = false,
+) {
+  const dataset = (roadMode ? roadRoutes : demoRoutes)[routeId].dataset;
+  const recordIndices = new Map(
+    dataset.records.map((r, i) => [r.timestamp, i]),
+  );
+  const [provider] = useState(() => {
+    const provider = new TelemetryPlayback();
+    if (!provider.loadDataset(dataset).valid)
+      throw new Error("Invalid route dataset");
+    return provider;
+  });
   const playback = useVehicleTelemetry(provider);
   const snapshot = useMemo(
-    () => getDemoSnapshot(playback.playback.index),
-    [playback.playback.index],
+    () => getDemoSnapshot(playback.playback.index, routeId, roadMode),
+    [playback.playback.index, routeId, roadMode],
   );
   const [availability, setAvailability] = useState<{
     available: boolean;
@@ -36,7 +46,11 @@ export function useIntegratedVehicle() {
         const response = await fetch("/api/intelligence", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ index }),
+          body: JSON.stringify({
+            index,
+            routeId,
+            ...(roadMode ? { mode: "road" } : {}),
+          }),
           signal: options?.signal,
         });
         if (!response.ok) throw new Error("Intelligence service unavailable");

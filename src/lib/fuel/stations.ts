@@ -28,7 +28,8 @@ export function validateFuelStations(input: unknown): StationValidationResult {
     }
     if (!Array.isArray(row.fuelTypes) || row.fuelTypes.length === 0 || !row.fuelTypes.every(nonempty)) issue(index, 'fuelTypes', 'Expected a nonempty list of fuel types');
     if (!optionalNonnegative(row.pricePerGallon) || row.pricePerGallon === 0) issue(index, 'pricePerGallon', 'Expected a positive price or explicit null');
-    if (row.priceSource !== 'sample' && row.priceSource !== 'verified') issue(index, 'priceSource', 'Expected sample or verified');
+    if (row.priceSource !== 'sample' && row.priceSource !== 'verified' && row.priceSource !== 'unknown') issue(index, 'priceSource', 'Expected sample, verified or unknown');
+    if (row.truckAccess !== undefined && !['yes', 'no', 'unknown'].includes(String(row.truckAccess))) issue(index, 'truckAccess', 'Expected yes, no or unknown');
     for (const field of ['distanceAlongRouteMiles', 'detourMiles']) {
       if (!optionalNonnegative(row[field])) issue(index, field, 'Expected finite nonnegative miles or explicit null');
     }
@@ -41,6 +42,7 @@ export function validateFuelStations(input: unknown): StationValidationResult {
       priceSource: row.priceSource as FuelStation['priceSource'],
       distanceAlongRouteMiles: row.distanceAlongRouteMiles as number | null,
       detourMiles: row.detourMiles as number | null,
+      ...(row.truckAccess === undefined ? {} : { truckAccess: row.truckAccess as FuelStation['truckAccess'] }),
       isAvailable: row.isAvailable as boolean, isSynthetic: row.isSynthetic as boolean,
     });
   });

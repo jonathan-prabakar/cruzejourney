@@ -7,7 +7,9 @@ export interface FuelStation {
   longitude: number | null;
   fuelTypes: string[];
   pricePerGallon: number | null;
-  priceSource: 'sample' | 'verified';
+  priceSource: 'sample' | 'verified' | 'unknown';
+  /** Mapped access is not a live operating-status guarantee. */
+  truckAccess?: 'yes' | 'no' | 'unknown';
   distanceAlongRouteMiles: number | null;
   /** Full additional leave-and-rejoin distance; conservatively charged before arrival. */
   detourMiles: number | null;

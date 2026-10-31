@@ -133,3 +133,23 @@ describe("single integrated playback lifecycle", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 });
+
+it("changing keyed road sessions resets readings and cancels the previous replay", async () => {
+  function RoadProbe({ routeId }: { routeId: "dallas" | "houston" }) {
+    const current = useIntegratedVehicle(routeId, true);
+    useEffect(() => { latest = current; }, [current]);
+    return null;
+  }
+  await act(async () => { root = create(createElement(RoadProbe, { key: "dallas", routeId: "dallas" })); });
+  await act(() => { latest.seekTo(160); latest.play(); });
+  expect(latest.snapshot.health.activeCodes).toContain("P0301");
+  const previous = latest.snapshot.currentTelemetry.timestamp;
+  await act(async () => { root.update(createElement(RoadProbe, { key: "houston", routeId: "houston" })); });
+  expect(latest.playback.index).toBe(0);
+  expect(latest.playback.status).toBe("ready");
+  expect(latest.snapshot.definition.destination).toBe("Houston");
+  expect(latest.snapshot.health.activeCodes).toEqual([]);
+  expect(latest.snapshot.currentTelemetry.timestamp).not.toBe(previous);
+  await act(async () => { await vi.advanceTimersByTimeAsync(120000); });
+  expect(latest.playback.index).toBe(0);
+});
