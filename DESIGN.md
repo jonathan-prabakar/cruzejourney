@@ -1,11 +1,21 @@
-# Cruze FuelSense design
+# Cruze FuelSense driving cockpit
 
-The user brief pins a dark automotive instrument environment. The dominant route schematic establishes location and the next decision; fuel intelligence stays beside it on wide screens. Six compact telemetry instruments sit above it. Diagnostics and efficiency occupy the second row, followed by disabled playback and explicit future-section placeholders.
+The direct UI brief replaces the scrolling dashboard with one fixed driving scene. The supplied wordmark, F symbol and exact palette remain authoritative. No sidebar, navigation tabs or chart tabs remain.
 
-Operate mode: drivers and evaluators scan a simulated journey. Dense labels group around large tabular measurements. Teal signals fuel and positive states, blue carries route guidance, amber cautions, red critical fuel, and purple illustrative insights. The supplied horizontal wordmark and road-shaped F symbol are used in navigation, the header and footer. These vector assets are editable interpretations of the supplied raster board, as documented by the asset bundle. App icons and favicon also use the supplied assets.
+## Surface contract
 
-The palette is imported from the supplied `src/styles/brand-tokens.css`; existing semantic aliases point to those tokens. The sidebar uses the supplied surface gradient.
+Operate mode. Show the current simulated journey as one continuous map field with a compact checkpoint briefing and vehicle communications. Journey progress is the actual 24/80-mile fixture (30%); there are no invented rewards, competitive scores or incentives to drive faster. Game character comes from the route/checkpoint framing, instrument hierarchy and a self-hosted Barlow Condensed measurement face.
 
-Panels have 12px corners and 1px borders, with no broad glow. Inline details avoid unnecessary interruptions; station selection uses a focused side drawer. Responsive breakpoints at 1250, 1000 and 720px reduce metrics, stack the map and fuel, and collapse the fixed navigation. Reduced motion disables smooth scrolling and transitions.
+The primary screen uses four fixed grid rows: brand/journey header, flexible map field, six-instrument deck, and preview replay bar. At 1440×900, 1280×720 and 390×844, document dimensions equal the viewport. On mobile the six instruments reorganize into a compact deck and the checkpoint sits within the map scene. Labels and alignment derive from these groups rather than independent dashboard cards.
 
-The map is explicitly schematic, northeast-oriented, labeled not to scale, with fictional fuel stops. No real station location is asserted.
+## Interaction
+
+The fuel gauge cycles normal/low/critical previews, preserving the existing 32/12/4% fixtures and 307.2/115.2/38.4-mile calculations. Station pins and checkpoint controls inspect fictional fuel stops. Health, efficiency, alternatives and run settings open native dialog inspections. Escape dismisses, native modal focus containment applies, and explicit opener restoration returns keyboard focus after dismissal. The chart comparison uses one action button, not tabs.
+
+The primary page does not scroll at tested viewports. Longer detail-dialog contents may scroll on small or zoomed viewports so safety copy stays reachable. This is an accessibility exception to the fixed main-screen composition, not a hidden content crop.
+
+## Materials and assets
+
+Use the supplied CSS token file, exact teal/blue/purple/amber/red semantics and existing SVG logos. A dark continuous route ground replaces individual panel backgrounds. Teal fuel, blue route, amber caution and purple efficiency cues retain their meaning. Measurements and headings use locally hosted Barlow Condensed SemiBold; body text retains the existing sans stack. Font origin: Google Fonts repository, `ofl/barlowcondensed`; OFL license ships alongside the TTF under `public/fonts/`.
+
+The route is explicitly schematic and not to scale. Stations/prices are fictional; telemetry, diagnostic signals and comparisons remain simulated. No M4 engine or other backend milestone was added by this UI redesign.

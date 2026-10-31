@@ -44,20 +44,13 @@ export default function Efficiency() {
           <span>vs. first sample</span>
         </div>
       </div>
-      <div className="tabs" aria-label="Efficiency chart">
-        <button
-          aria-pressed={view === "trend"}
-          onClick={() => setView("trend")}
-        >
-          Consumption trend
-        </button>
-        <button
-          aria-pressed={view === "compare"}
-          onClick={() => setView("compare")}
-        >
-          Driving comparison
-        </button>
-      </div>
+      <button
+        className="outline-button comparison-switch"
+        onClick={() => setView(view === "trend" ? "compare" : "trend")}
+      >
+        {view === "trend" ? "Compare driving styles" : "Show consumption trend"}{" "}
+        <TrendingUp size={15} />
+      </button>
       <div
         className="chart"
         role="img"

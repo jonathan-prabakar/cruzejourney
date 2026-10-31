@@ -37,3 +37,7 @@ Keyboard controls, visible focus, responsive layouts, reduced motion, readable c
 ## Added reference material
 
 `docs/Cruze_FuelSense_Hackathon_Plan.md` is supplied planning documentation, not authorization to implement future features in the UI-only asset task. Supplied logo, icon, token and brand-board assets now inform presentation; their origin is recorded in `docs/BRAND_ASSETS.md`. Existing functional scope is unchanged.
+
+## Current interface commitment
+
+The user explicitly requested a fixed, lightly gamified driving interface with no sidebar or tabs. Preserve existing functionality and brand assets while presenting the primary experience as one cockpit. Long explanations remain accessible through detail inspections. The attached M4 diagnostic-engine prompt is separate context; this UI task does not implement or merge that engine.

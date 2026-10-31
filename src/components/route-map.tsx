@@ -1,25 +1,17 @@
 "use client";
-import { Navigation, LocateFixed, Fuel, ArrowUpRight } from "lucide-react";
-import { stations, route, type Station } from "@/lib/mock-data";
+import { Navigation, Fuel } from "lucide-react";
+import { stations, type Station } from "@/lib/mock-data";
 export default function RouteMap({
   onStation,
 }: {
-  onStation: (s: Station) => void;
+  onStation: (station: Station, trigger: HTMLButtonElement) => void;
 }) {
   return (
-    <section className="panel map-panel" aria-labelledby="route-title">
-      <div className="panel-heading">
-        <div>
-          <h2 id="route-title">Your journey</h2>
-          <p>
-            San Antonio <ArrowUpRight size={12} /> Austin, Texas
-          </p>
-        </div>
-        <span className="chip blue">I-35 NORTH</span>
-      </div>
+    <section className="route-map" aria-label="Schematic route to Austin">
       <div className="map-canvas">
         <svg
           viewBox="0 0 800 510"
+          preserveAspectRatio="none"
           role="img"
           aria-label="Schematic route traveling northeast from San Antonio through New Braunfels and San Marcos to Austin. Fictional fuel stops are selectable below."
         >
@@ -63,7 +55,7 @@ export default function RouteMap({
             strokeWidth="9"
             opacity=".5"
           />
-          <g fontSize="11" fill="#6f8197" fontFamily="sans-serif">
+          <g fontSize="11" fill="#8ca1b8" fontFamily="sans-serif">
             <text x="80" y="85">
               HILL COUNTRY
             </text>
@@ -158,54 +150,21 @@ export default function RouteMap({
           </text>
         </svg>
         <div className="map-compass">
-          <Navigation size={16} />
+          <Navigation size={15} />
           <span>N</span>
         </div>
         {stations.map((s, i) => (
           <button
             key={s.id}
             className={`station-pin pin-${i}`}
-            onClick={() => onStation(s)}
+            onClick={(event) => onStation(s, event.currentTarget)}
             aria-label={`View fictional ${s.name}`}
           >
-            <Fuel size={15} />
-            {i === 0 && <span>Best stop · $3.49</span>}
+            <Fuel size={16} />
+            {i === 0 && <span>Next stop</span>}
           </button>
         ))}
-        <div className="route-summary">
-          <div className="route-icon">
-            <Navigation size={20} />
-          </div>
-          <div>
-            <strong>
-              {route.remainingMinutes} min{" "}
-              <span>· {route.remainingMiles} mi</span>
-            </strong>
-            <p>
-              Arrive at {route.arrival} <span>· Via I-35 N</span>
-            </p>
-          </div>
-          <span className="chip teal">ON ROUTE</span>
-        </div>
       </div>
-      <div className="map-footer">
-        <span>
-          <i className="legend-line" /> Planned route
-        </span>
-        <span>
-          <i className="dot teal-dot" /> Your vehicle
-        </span>
-        <span>
-          <Fuel size={12} /> Demo fuel stop
-        </span>
-        <button className="text-button" onClick={() => onStation(stations[0])}>
-          <LocateFixed size={14} /> View next stop
-        </button>
-      </div>
-      <p className="map-disclaimer">
-        Schematic route visualization. All fuel stations are fictional demo
-        data.
-      </p>
     </section>
   );
 }
