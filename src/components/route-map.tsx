@@ -1,7 +1,12 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { Layers, LocateFixed, Map as MapIcon } from "lucide-react";
-import type { Map as LibreMap, Marker, GeoJSONSource } from "maplibre-gl";
+import { Fuel, Layers, LocateFixed, Map as MapIcon } from "lucide-react";
+import type { Map as LibreMap, Marker } from "maplibre-gl";
+import {
+  geometryDistances,
+  pointAtProgress,
+} from "@/lib/integration/road-geometry";
+import type { RoadRoute } from "@/lib/integration/road-routes";
 import { roadRoutes } from "@/lib/integration/road-routes";
 import type { DemoRouteId } from "@/lib/integration/routes";
 import type { FuelStation } from "@/lib/fuel/types";
@@ -13,8 +18,18 @@ export default function RouteMap({
   telemetry,
   stations,
   recommendedId,
+  trip,
+  getMotionProgress,
+  playing = false,
+  fastRun = false,
+  onStations,
 }: {
   routeId?: DemoRouteId;
+  trip?: RoadRoute;
+  getMotionProgress?: () => number;
+  playing?: boolean;
+  fastRun?: boolean;
+  onStations?: (trigger: HTMLElement) => void;
   onStation: (station: FuelStation, trigger: HTMLElement | SVGElement) => void;
   telemetry: VehicleTelemetry;
   stations: readonly FuelStation[];
@@ -32,7 +47,7 @@ export default function RouteMap({
   const [ready, setReady] = useState(false);
   const [is3d, setIs3d] = useState(true);
   const [follow, setFollow] = useState(true);
-  const route = roadRoutes[routeId];
+  const route = trip ?? roadRoutes[routeId];
   const overview = () => {
     const coordinates = route.road.geometry.coordinates;
     const longitudes = coordinates.map((p) => p[0]),
@@ -58,6 +73,12 @@ export default function RouteMap({
     import("maplibre-gl")
       .then((lib) => {
         if (cancelled || !container.current) return;
+        lib.setWorkerUrl(
+          new URL(
+            "maplibre-gl/dist/maplibre-gl-worker.mjs",
+            import.meta.url,
+          ).toString(),
+        );
         const current = latest.current.telemetry;
         const instance = new lib.Map({
           container: container.current,
@@ -150,8 +171,12 @@ export default function RouteMap({
               `View mapped fuel station ${station.name}`,
             );
             button.title = station.name;
+            const label = document.createElement("span");
+            label.className = "station-pin-label";
+            label.textContent = station.name;
             button.innerHTML =
               '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 22V4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v18M1 22h14M4 6h8v6H4m9 2h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9l-4-4m2 2v4h2"/></svg>';
+            button.appendChild(label);
             button.addEventListener("click", () =>
               latest.current.onStation(station, button),
             );
@@ -172,7 +197,10 @@ export default function RouteMap({
           vehicle.innerHTML =
             '<svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="m12 2 8 19-8-4-8 4Z"/></svg>';
           const reading = latest.current.telemetry;
-          truck.current = new lib.Marker({ element: vehicle })
+          truck.current = new lib.Marker({
+            element: vehicle,
+            rotationAlignment: "map",
+          })
             .setLngLat([reading.longitude!, reading.latitude!])
             .addTo(instance);
           ownedMarkers.push(truck.current);
@@ -199,23 +227,63 @@ export default function RouteMap({
     };
   }, [route, stations]);
   useEffect(() => {
-    if (!ready || telemetry.latitude === null || telemetry.longitude === null)
-      return;
-    const point: [number, number] = [telemetry.longitude, telemetry.latitude];
-    truck.current?.setLngLat(point);
-    (
-      map.current?.getSource("trip-position") as GeoJSONSource | undefined
-    )?.setData({
-      type: "Feature",
-      properties: {},
-      geometry: { type: "Point", coordinates: point },
-    });
-    if (follow)
-      map.current?.jumpTo({ center: point, zoom: 13.8, pitch: is3d ? 55 : 0 });
+    if (!ready) return;
+    const cumulative = geometryDistances(route.road.geometry.coordinates);
+    let frame = 0;
+    const draw = () => {
+      const progress = getMotionProgress?.();
+      const point: [number, number] =
+        progress === undefined
+          ? [telemetry.longitude!, telemetry.latitude!]
+          : pointAtProgress(
+              route.road.geometry.coordinates,
+              cumulative,
+              progress,
+            );
+      truck.current?.setLngLat(point);
+      if (progress !== undefined) {
+        const ahead = pointAtProgress(
+          route.road.geometry.coordinates,
+          cumulative,
+          Math.min(1, progress + 0.00001),
+        );
+        const bearing =
+          (Math.atan2(
+            (ahead[0] - point[0]) * Math.cos((point[1] * Math.PI) / 180),
+            ahead[1] - point[1],
+          ) *
+            180) /
+          Math.PI;
+        truck.current?.setRotation(bearing);
+      }
+      if (follow)
+        map.current?.jumpTo({
+          center: point,
+          zoom: fastRun ? 11 : 13.8,
+          pitch: is3d ? 55 : 0,
+        });
+      if (playing && getMotionProgress) frame = requestAnimationFrame(draw);
+    };
+    draw();
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [
+    ready,
+    route,
+    getMotionProgress,
+    playing,
+    follow,
+    is3d,
+    fastRun,
+    telemetry.latitude,
+    telemetry.longitude,
+  ]);
+  useEffect(() => {
     markers.current.forEach((button, id) =>
       button.classList.toggle("recommended", id === recommendedId),
     );
-  }, [telemetry, ready, follow, is3d, recommendedId]);
+  }, [recommendedId, ready]);
   return (
     <section
       className="route-map real-route-map"
@@ -228,6 +296,13 @@ export default function RouteMap({
         </p>
       )}
       <div className="real-map-controls">
+        <button
+          type="button"
+          aria-label={`Show all ${stations.length} mapped gas stations`}
+          onClick={(event) => onStations?.(event.currentTarget)}
+        >
+          <Fuel size={17} /> <span>Stations ({stations.length})</span>
+        </button>
         <button
           type="button"
           disabled={!ready}

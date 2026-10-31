@@ -39,3 +39,5 @@ For optional Gemma reasoning: copy `.env.example` to `.env.local`, set the serve
 ## Real road maps
 
 The active cockpit follows cached real road geometry with simulated vehicle readings. Use **3D/2D**, **Follow**, and **Route** on the map. Buildings appear at close zoom where map data exists. Real stations are selectable from pins and the accessible stop list. Map tiles require internet access; route and station records are bundled. See [real-map implementation](docs/REAL_WORLD_MAPS.md) for provenance, refresh commands and limitations.
+
+The map's **Stations** control opens all saved mapped gas stations. Select a stop and **Route to this station** to build a real road route from the current replay position; this ends the new simulation at the stop without simulating a fuel purchase. Choose **10 seconds**, **15 seconds** or **20 seconds** in **Run length** to reset and start a complete accelerated replay. Existing speed multipliers remain available. See [ranked findings](docs/MAP_ISSUES.md) and the [new-chat handoff](docs/REAL_WORLD_MAPS.md) for validation and remaining limits.

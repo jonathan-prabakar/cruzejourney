@@ -23,7 +23,10 @@ export interface DatasetMetadata {
   limitations: string[];
   vehicle: VehicleProfile;
 }
-export interface TelemetryDataset { metadata: DatasetMetadata; records: VehicleTelemetry[] }
+export interface TelemetryDataset {
+  metadata: DatasetMetadata;
+  records: VehicleTelemetry[];
+}
 export interface ValidationIssue {
   /** Original input index; null for dataset-level issues. */
   index: number | null;
@@ -36,11 +39,13 @@ export interface DatasetValidationResult {
   records: VehicleTelemetry[];
   errors: ValidationIssue[];
 }
+export type RunDuration = 10 | 15 | 20;
 export type PlaybackSpeed = 1 | 2 | 5;
-export type PlaybackStatus = 'empty' | 'ready' | 'playing' | 'paused' | 'ended';
+export type PlaybackStatus = "empty" | "ready" | "playing" | "paused" | "ended";
 export interface PlaybackState {
   status: PlaybackStatus;
   speed: PlaybackSpeed;
+  run_duration_seconds?: RunDuration | null;
   index: number;
   total: number;
   /** Timestamp progress, from 0 to 1; zero for an empty dataset. */
@@ -48,7 +53,10 @@ export interface PlaybackState {
   elapsed_ms: number;
   duration_ms: number;
 }
-export interface TelemetrySnapshot { telemetry: VehicleTelemetry | null; playback: PlaybackState }
+export interface TelemetrySnapshot {
+  telemetry: VehicleTelemetry | null;
+  playback: PlaybackState;
+}
 export type TelemetryListener = () => void;
 export interface TelemetryProvider {
   loadDataset(input: unknown): DatasetValidationResult;
@@ -56,6 +64,8 @@ export interface TelemetryProvider {
   pause(): void;
   reset(): void;
   setPlaybackSpeed(speed: PlaybackSpeed): void;
+  setRunDuration(seconds: RunDuration | null): void;
+  getElapsedMs(): number;
   /** Seek to an integer record index. Invalid indices throw RangeError. */
   seekTo(index: number): void;
   getCurrentTelemetry(): VehicleTelemetry | null;

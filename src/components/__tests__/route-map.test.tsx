@@ -12,6 +12,7 @@ const calls = vi.hoisted(() => ({
   fit: 0,
 }));
 vi.mock("maplibre-gl", () => ({
+  setWorkerUrl() {},
   Map: class {
     constructor() {
       calls.layers = [];
@@ -44,6 +45,9 @@ vi.mock("maplibre-gl", () => ({
     }
   },
   Marker: class {
+    setRotation() {
+      return this;
+    }
     setLngLat() {
       return this;
     }
@@ -69,6 +73,7 @@ it("creates real geometry and 3D layers, exposes overview, and releases owned ma
       className: "",
       setAttribute() {},
       addEventListener() {},
+      appendChild() {},
       classList: { toggle() {} },
     }),
   });

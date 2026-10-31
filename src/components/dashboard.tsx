@@ -1,5 +1,9 @@
 "use client";
-import { destinationDefinitions, routeIds, type DemoRouteId } from "@/lib/integration/routes";
+import {
+  destinationDefinitions,
+  routeIds,
+  type DemoRouteId,
+} from "@/lib/integration/routes";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import {
@@ -26,12 +30,10 @@ import {
 import RouteMap from "./route-map";
 import Efficiency from "./efficiency";
 import { useIntegratedVehicle } from "@/hooks/useIntegratedVehicle";
-import {
-  formatDemoTime,
-  formatDuration,
-} from "@/lib/integration/snapshot";
+import { formatDemoTime, formatDuration } from "@/lib/integration/snapshot";
 import type { FuelStation } from "@/lib/fuel/types";
-import type { PlaybackSpeed } from "@/lib/telemetry/types";
+import type { RoutePlan } from "@/lib/integration/road-routes";
+import type { RunDuration, PlaybackSpeed } from "@/lib/telemetry/types";
 type Inspection =
   | "health"
   | "efficiency"
@@ -85,10 +87,42 @@ function InspectionDialog({
 
 export default function Dashboard() {
   const [routeId, setRouteId] = useState<DemoRouteId>("austin");
-  return <DrivingSession key={routeId} routeId={routeId} onRouteChange={setRouteId} />;
+  const [plan, setPlan] = useState<RoutePlan | undefined>();
+  const [duration, setDuration] = useState<RunDuration | null>(null);
+  return (
+    <DrivingSession
+      key={plan?.id ?? routeId}
+      routeId={routeId}
+      plan={plan}
+      initialDuration={duration}
+      onRouteChange={(id) => {
+        setPlan(undefined);
+        setRouteId(id);
+      }}
+      onPlan={(next, seconds) => {
+        setDuration(seconds);
+        setPlan(next);
+      }}
+      onOriginal={() => setPlan(undefined)}
+    />
+  );
 }
-function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRouteChange: (id: DemoRouteId) => void }) {
-  const app = useIntegratedVehicle(routeId, true);
+function DrivingSession({
+  routeId,
+  plan,
+  initialDuration,
+  onRouteChange,
+  onPlan,
+  onOriginal,
+}: {
+  routeId: DemoRouteId;
+  plan?: RoutePlan;
+  initialDuration: RunDuration | null;
+  onRouteChange: (id: DemoRouteId) => void;
+  onPlan: (plan: RoutePlan, duration: RunDuration | null) => void;
+  onOriginal: () => void;
+}) {
+  const app = useIntegratedVehicle(routeId, true, plan, initialDuration);
   const { snapshot, playback, intelligence } = app;
   const {
     currentTelemetry: telemetry,
@@ -103,6 +137,44 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
   const [station, setStation] = useState<FuelStation | null>(null);
   const [inspection, setInspection] = useState<Inspection>(null);
   const [details, setDetails] = useState(false);
+  const [routing, setRouting] = useState(false);
+  const [routingError, setRoutingError] = useState("");
+  const routeAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => routeAbort.current?.abort(), []);
+  const routeToStation = async (target: FuelStation) => {
+    if (routing) return;
+    const index = app.pauseForRouting();
+    const abort = new AbortController();
+    routeAbort.current?.abort();
+    routeAbort.current = abort;
+    setRouting(true);
+    setRoutingError("");
+    try {
+      const response = await fetch("/api/route-to-station", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: abort.signal,
+        body: JSON.stringify({
+          routeId,
+          index,
+          stationId: target.id,
+          ...(plan ? { planId: plan.id } : {}),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok)
+        throw new Error(data.error ?? "Unable to route to this stop.");
+      if (!abort.signal.aborted)
+        onPlan(data as RoutePlan, playback.run_duration_seconds ?? null);
+    } catch (error) {
+      if (!abort.signal.aborted)
+        setRoutingError(
+          error instanceof Error ? error.message : "Routing failed. Try again.",
+        );
+    } finally {
+      if (!abort.signal.aborted) setRouting(false);
+    }
+  };
   const progress = Math.round(snapshot.progress * 100);
   const fuelState = fuel.status.fuelStatus.toLowerCase();
   const selected = fuel.recommendation.assessments.find(
@@ -160,15 +232,27 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
           aria-label={`${progress}% of the synthetic journey completed`}
         >
           <div>
-            <span>San Antonio</span>
+            <span>{plan ? "Fuel stop route" : "San Antonio"}</span>
             <span className="track-distance">
               {number(route.currentDistanceAlongRouteMiles)} /{" "}
               {number(snapshot.totalMiles)} mi
             </span>
             <strong>
-              <select aria-label="Destination" className="destination-select" value={routeId} onChange={event => onRouteChange(event.target.value as DemoRouteId)}>
-                {routeIds.map(id => <option key={id} value={id}>{destinationDefinitions[id].destination}</option>)}
-              </select> <Flag size={12} />
+              <select
+                aria-label="Destination"
+                className="destination-select"
+                value={routeId}
+                onChange={(event) =>
+                  onRouteChange(event.target.value as DemoRouteId)
+                }
+              >
+                {routeIds.map((id) => (
+                  <option key={id} value={id}>
+                    {destinationDefinitions[id].destination}
+                  </option>
+                ))}
+              </select>{" "}
+              <Flag size={12} />
             </strong>
           </div>
           <div className="journey-progress">
@@ -197,17 +281,30 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
             stations={snapshot.stations}
             routeId={routeId}
             recommendedId={recommendation?.id ?? null}
+            trip={app.trip}
+            getMotionProgress={app.getMotionProgress}
+            playing={playback.status === "playing"}
+            fastRun={Boolean(playback.run_duration_seconds)}
+            onStations={(trigger) => openInspection("stops", trigger)}
           />
         </div>
         <div className="run-heading">
           <h1>
-            The {snapshot.definition.destination} run<span>.</span>
+            {plan
+              ? "The fuel stop run"
+              : `The ${snapshot.definition.destination} run`}
+            <span>.</span>
           </h1>
           <p>
-            <Navigation size={13} /> {snapshot.definition.corridor} <span>·</span>{" "}
-            {number(route.remainingRouteMiles)} road miles to go
+            <Navigation size={13} /> {snapshot.definition.corridor}{" "}
+            <span>·</span> {number(route.remainingRouteMiles)} road miles to go
           </p>
         </div>
+        {plan && (
+          <button className="return-to-trip" onClick={onOriginal}>
+            Return to {destinationDefinitions[routeId].destination} trip
+          </button>
+        )}
         <div className="arrival-readout">
           <span>REPLAY ARRIVAL · CT</span>
           <strong>
@@ -444,7 +541,9 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
         <div className="replay-controls">
           <button
             disabled={
-              playback.status === "playing" || playback.status === "ended"
+              routing ||
+              playback.status === "playing" ||
+              playback.status === "ended"
             }
             onClick={app.play}
             aria-label="Play telemetry"
@@ -458,12 +557,17 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
           >
             <Pause size={15} />
           </button>
-          <button onClick={app.reset} aria-label="Reset telemetry">
+          <button
+            disabled={routing}
+            onClick={app.reset}
+            aria-label="Reset telemetry"
+          >
             <RotateCcw size={14} />
           </button>
         </div>
         <div className="replay-timeline">
           <input
+            disabled={routing}
             type="range"
             min="0"
             max={playback.total - 1}
@@ -479,17 +583,30 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
           </span>
         </div>
         <label className="replay-speed">
-          <span>Replay speed</span>
+          <span>Run length</span>
           <select
-            value={String(playback.speed)}
-            onChange={(e) =>
-              app.setPlaybackSpeed(Number(e.target.value) as PlaybackSpeed)
+            disabled={routing}
+            value={
+              playback.run_duration_seconds
+                ? `${playback.run_duration_seconds}s`
+                : String(playback.speed)
             }
-            aria-label="Playback speed"
+            onChange={(event) => {
+              const value = event.target.value;
+              if (value.endsWith("s")) {
+                app.setRunDuration(Number(value.slice(0, -1)) as RunDuration);
+                app.reset();
+                app.play();
+              } else app.setPlaybackSpeed(Number(value) as PlaybackSpeed);
+            }}
+            aria-label="Simulation duration or playback speed"
           >
-            <option value="1">1×</option>
-            <option value="2">2×</option>
-            <option value="5">5×</option>
+            <option value="10s">10 seconds</option>
+            <option value="15s">15 seconds</option>
+            <option value="20s">20 seconds</option>
+            <option value="1">1× real time</option>
+            <option value="2">2× speed</option>
+            <option value="5">5× speed</option>
           </select>
         </label>
         <span className="replay-source">
@@ -508,7 +625,13 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
           <span className="detail-tag">
             OPENSTREETMAP STATION · {selected?.status ?? "UNKNOWN"}
           </span>
-          <p className="fine-print">Mapped location; current operation, hours and fuel stock are unverified. Diesel: {station.fuelTypes.includes("diesel") ? "listed in OSM" : "unknown"}. Truck access: {station.truckAccess ?? "unknown"}. No live fuel prices.</p>
+          <p className="fine-print">
+            Mapped location; current operation, hours and fuel stock are
+            unverified. Diesel:{" "}
+            {station.fuelTypes.includes("diesel") ? "listed in OSM" : "unknown"}
+            . Truck access: {station.truckAccess ?? "unknown"}. No live fuel
+            prices.
+          </p>
           <p>
             {selected?.explanation ??
               "Reachability is unavailable for this reading."}
@@ -543,7 +666,36 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
             {fuel.fuel.planningMpg} MPG and a {fuel.fuel.reservePercent}%
             reserve of total tank capacity. Estimates do not guarantee arrival.
           </p>
-          <a className="outline-button" href={`https://www.openstreetmap.org/${station.id.replace("osm-", "").replace("-", "/")}`} target="_blank" rel="noreferrer">View source on OpenStreetMap</a>
+          {routingError && (
+            <p role="alert" className="routing-error">
+              {routingError}
+            </p>
+          )}
+          <button
+            className="primary-button"
+            disabled={
+              routing ||
+              station.truckAccess === "no" ||
+              playback.status === "ended"
+            }
+            onClick={() => void routeToStation(station)}
+          >
+            <Navigation size={16} />{" "}
+            {routing ? "Finding road route…" : "Route to this station"}
+          </button>
+          <p className="fine-print">
+            Routes from the current replay position and ends at this stop. Does
+            not simulate purchasing fuel. Selecting a 10/15/20-second run starts
+            the new route.
+          </p>
+          <a
+            className="outline-button"
+            href={`https://www.openstreetmap.org/${station.id.replace("osm-", "").replace("-", "/")}`}
+            target="_blank"
+            rel="noreferrer"
+          >
+            View source on OpenStreetMap
+          </a>
           <button className="primary-button" onClick={close}>
             Back to the run <ArrowRight size={16} />
           </button>
@@ -590,12 +742,24 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
             <p key={w.code}>{w.explanation}</p>
           ))}
           <p className="fine-print">
-            Simulated vehicle readings on cached road routes. Station locations are mapped in OpenStreetMap; prices, opening status, diesel stock and truck access are not live verified. The entire routed local access loop is charged before arrival as a conservative allowance. Routes use a driving profile, not truck-specific navigation.
+            Simulated vehicle readings on cached road routes. Station locations
+            are mapped in OpenStreetMap; prices, opening status, diesel stock
+            and truck access are not live verified. The entire routed local
+            access loop is charged before arrival as a conservative allowance.
+            Routes use a driving profile, not truck-specific navigation.
           </p>
         </InspectionDialog>
       )}
       {inspection === "stops" && (
-        <InspectionDialog title="Stops along your route" onClose={close}>
+        <InspectionDialog
+          title={`Mapped gas stations (${snapshot.stations.length})`}
+          onClose={close}
+        >
+          <p>
+            All saved stations for this trip. Opening status, stock and truck
+            access may be unknown. Select a station for details and a road
+            route.
+          </p>
           <p>{fuel.recommendation.explanation}</p>
           <div className="stop-list">
             {fuel.recommendation.assessments.map((a) => (
@@ -607,7 +771,14 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
                 <span>
                   <strong>{a.station.name}</strong>
                   <small>
-                    {a.status} · {number(a.routeDistanceMiles)} road mi ahead
+                    {a.status} ·{" "}
+                    {a.station.fuelTypes.includes("diesel")
+                      ? "Diesel mapped"
+                      : "Fuel type unknown"}{" "}
+                    ·{" "}
+                    {a.station.distanceAlongRouteMiles === null
+                      ? "Route position unknown"
+                      : `${number(Math.abs(a.station.distanceAlongRouteMiles - (route.currentDistanceAlongRouteMiles ?? 0)))} mi ${a.station.distanceAlongRouteMiles < (route.currentDistanceAlongRouteMiles ?? 0) ? "behind" : "along route"}`}
                   </small>
                 </span>
                 <b>
@@ -754,7 +925,7 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
       {inspection === "efficiency" && (
         <InspectionDialog title="Your driving rhythm" onClose={close}>
           <Efficiency
-            history={snapshot.history}
+            history={snapshot.dataset.records.slice(0, playback.index + 1)}
             averageMpg={snapshot.averageMpg}
             initialFuelPercent={snapshot.dataset.records[0].fuel_percent}
             tankCapacity={vehicle.tank_capacity_gallons}
@@ -783,7 +954,10 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
             </div>
             <div>
               <dt>Trip</dt>
-              <dd>San Antonio → {snapshot.definition.destination}</dd>
+              <dd>
+                {plan ? "Current position" : "San Antonio"} →{" "}
+                {snapshot.definition.destination}
+              </dd>
             </div>
             <div>
               <dt>Position</dt>
@@ -808,14 +982,27 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
             </div>
           </dl>
           <p>
-            241 simulated vehicle readings on real road geometry, with cached OpenStreetMap fuel stations. Mileage is routing-engine derived; travel time and fuel consumption are estimates. No live navigation, traffic or vehicle connection. Opening status and truck suitability are unverified.
+            {playback.total} simulated vehicle readings on real road geometry,
+            with cached OpenStreetMap fuel stations. Mileage is routing-engine
+            derived; travel time and fuel consumption are estimates. No live
+            navigation, traffic or vehicle connection. Opening status and truck
+            suitability are unverified.
           </p>
           <div className="scenario-controls">
             <button
               className="outline-button"
+              disabled={
+                routing ||
+                !snapshot.dataset.records.some(
+                  (record) => record.diagnostic_code === "P0301",
+                )
+              }
               onClick={() => {
                 app.pause();
-                app.seekTo(160);
+                const diagnostic = snapshot.dataset.records.findIndex(
+                  (record) => record.diagnostic_code === "P0301",
+                );
+                if (diagnostic >= 0) app.seekTo(diagnostic);
                 close();
               }}
             >
@@ -825,11 +1012,11 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
               className="outline-button"
               onClick={() => {
                 app.pause();
-                app.seekTo(240);
+                app.seekTo(playback.total - 1);
                 close();
               }}
             >
-              Seek to critical-fuel ending
+              Seek to trip ending
             </button>
           </div>
         </InspectionDialog>

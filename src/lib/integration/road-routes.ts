@@ -5,7 +5,7 @@ import elPaso from "../../data/road-routes/el-paso.json";
 import original from "../../data/demo-telemetry.json";
 import { DEMO_ROUTE_LENGTH_MILES } from "../fuel";
 import { validateFuelStations } from "../fuel/stations";
-import type { TelemetryDataset } from "../telemetry/types";
+import type { VehicleTelemetry, TelemetryDataset } from "../telemetry/types";
 import { destinationDefinitions, routeIds, type DemoRouteId } from "./routes";
 import { geometryDistances, pointAtProgress } from "./road-geometry";
 const snapshots = { austin, dallas, houston, "el-paso": elPaso };
@@ -82,3 +82,11 @@ export function createRoadRoute(id: DemoRouteId) {
 export const roadRoutes = Object.fromEntries(
   routeIds.map((id) => [id, createRoadRoute(id)]),
 ) as Record<DemoRouteId, ReturnType<typeof createRoadRoute>>;
+
+export type RoadRoute = ReturnType<typeof createRoadRoute> & {
+  priorHistory?: VehicleTelemetry[];
+};
+export interface RoutePlan {
+  id: string;
+  trip: RoadRoute;
+}

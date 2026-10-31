@@ -1,9 +1,7 @@
-import { roadRoutes } from "./road-routes";
+import { roadRoutes, type RoadRoute } from "./road-routes";
 import demo from "../../data/demo-telemetry.json";
 import { type DemoRouteId } from "./routes";
-import {
-  calculateFuelIntelligence,
-} from "../fuel";
+import { calculateFuelIntelligence } from "../fuel";
 import { assessVehicleHealth } from "../diagnostics";
 import type { VehicleTelemetry } from "../telemetry/types";
 import type { VehicleIntelligenceContext } from "../intelligence/types";
@@ -15,17 +13,21 @@ export function getDemoSnapshot(
   index: number,
   routeId: DemoRouteId = "austin",
   _roadMode = true,
+  override?: RoadRoute,
 ) {
   // Retain the former mode argument for callers; fictional map mode was removed.
   void _roadMode;
-  const definition = roadRoutes[routeId];
+  const definition: RoadRoute = override ?? roadRoutes[routeId];
   const demo = definition.dataset;
   const demoStations = definition.stations;
   const totalMiles = definition.miles;
   if (!Number.isInteger(index) || index < 0 || index >= demo.records.length)
     throw new RangeError("Invalid telemetry index");
   const currentTelemetry: VehicleTelemetry = demo.records[index];
-  const history: VehicleTelemetry[] = demo.records.slice(0, index + 1);
+  const history: VehicleTelemetry[] = [
+    ...(definition.priorHistory ?? []),
+    ...demo.records.slice(0, index + 1),
+  ];
   const route = {
     currentDistanceAlongRouteMiles: definition.progress[index],
     remainingRouteMiles: Math.max(0, totalMiles - definition.progress[index]),
