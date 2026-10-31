@@ -10,6 +10,7 @@ const calls = vi.hoisted(() => ({
   removed: 0,
   markersRemoved: 0,
   fit: 0,
+  handlers: new Map<string, (event: unknown) => void>(),
 }));
 vi.mock("maplibre-gl", () => ({
   setWorkerUrl() {},
@@ -19,8 +20,10 @@ vi.mock("maplibre-gl", () => ({
       calls.sources = [];
     }
     addControl() {}
-    on(event: string, callback: () => void) {
-      if (event === "load") callback();
+    on(event: string, layerOrCallback: string | (() => void), callback?: (event: unknown) => void) {
+      if (event === "load" && typeof layerOrCallback === "function") layerOrCallback();
+      if (typeof layerOrCallback === "string" && callback)
+        calls.handlers.set(`${event}:${layerOrCallback}`, callback);
     }
     addSource(id: string, data: unknown) {
       calls.sources.push({ id, data });
@@ -33,6 +36,10 @@ vi.mock("maplibre-gl", () => ({
     }
     getSource() {
       return { setData() {} };
+    }
+    setFeatureState() {}
+    getCanvas() {
+      return { style: {}, focus() {} };
     }
     resize() {}
     jumpTo() {}
@@ -85,6 +92,7 @@ it("creates real geometry and 3D layers, exposes overview, and releases owned ma
     },
   );
   const route = roadRoutes.dallas;
+  const stationOpened = vi.fn();
   const removedBefore = calls.removed,
     markersBefore = calls.markersRemoved;
   await act(async () => {
@@ -94,7 +102,7 @@ it("creates real geometry and 3D layers, exposes overview, and releases owned ma
         telemetry: route.dataset.records[0],
         stations: route.stations,
         recommendedId: null,
-        onStation() {},
+        onStation: stationOpened,
       }),
       { createNodeMock: () => ({}) },
     );
@@ -118,6 +126,16 @@ it("creates real geometry and 3D layers, exposes overview, and releases owned ma
   expect(calls.layers).toContainEqual(
     expect.objectContaining({ id: "cruze-buildings", type: "fill-extrusion" }),
   );
+  expect(calls.sources).toContainEqual(
+    expect.objectContaining({ id: "truck-stops", data: expect.objectContaining({ type: "geojson", cluster: true }) }),
+  );
+  expect(calls.layers).toContainEqual(
+    expect.objectContaining({ id: "truck-stop-clusters", type: "circle" }),
+  );
+  const pinClick = calls.handlers.get("click:truck-stop-points");
+  expect(pinClick).toBeDefined();
+  await act(() => pinClick?.({ features: [{ properties: { stationId: route.stations[0].id } }] }));
+  expect(stationOpened).toHaveBeenCalledWith(route.stations[0], expect.anything());
   const overview = root.root
     .findAllByType("button")
     .find((button) => button.props.children.includes("Route"))!;
@@ -126,5 +144,5 @@ it("creates real geometry and 3D layers, exposes overview, and releases owned ma
   expect(calls.fit).toBeGreaterThan(0);
   await act(() => root.unmount());
   expect(calls.removed).toBe(removedBefore + 1);
-  expect(calls.markersRemoved).toBe(markersBefore + route.stations.length + 1);
+  expect(calls.markersRemoved).toBe(markersBefore + 1);
 });

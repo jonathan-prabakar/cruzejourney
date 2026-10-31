@@ -29,6 +29,12 @@ export function validateFuelStations(input: unknown): StationValidationResult {
     if (!optionalNonnegative(row.pricePerGallon) || row.pricePerGallon === 0) issue(index, 'pricePerGallon', 'Expected a positive price or explicit null');
     if (row.priceSource !== 'sample' && row.priceSource !== 'verified' && row.priceSource !== 'unknown') issue(index, 'priceSource', 'Expected sample, verified or unknown');
     if (row.truckAccess !== undefined && !['yes', 'no', 'unknown'].includes(String(row.truckAccess))) issue(index, 'truckAccess', 'Expected yes, no or unknown');
+    if (row.sourceUrl !== undefined && (typeof row.sourceUrl !== 'string' || !/^https:\/\//.test(row.sourceUrl))) issue(index, 'sourceUrl', 'Expected an HTTPS source URL');
+    if (row.priceVerifiedAt !== undefined && (typeof row.priceVerifiedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(row.priceVerifiedAt))) issue(index, 'priceVerifiedAt', 'Expected a YYYY-MM-DD price check date');
+    if (row.address !== undefined && !nonempty(row.address)) issue(index, 'address', 'Expected a nonempty address');
+    for (const field of ['truckParkingSpaces', 'defLanes']) {
+      if (row[field] !== undefined && (!Number.isInteger(row[field]) || (row[field] as number) < 0)) issue(index, field, 'Expected a nonnegative integer');
+    }
     for (const field of ['distanceAlongRouteMiles', 'detourMiles']) {
       if (!optionalNonnegative(row[field])) issue(index, field, 'Expected finite nonnegative miles or explicit null');
     }
@@ -42,6 +48,11 @@ export function validateFuelStations(input: unknown): StationValidationResult {
       distanceAlongRouteMiles: row.distanceAlongRouteMiles as number | null,
       detourMiles: row.detourMiles as number | null,
       ...(row.truckAccess === undefined ? {} : { truckAccess: row.truckAccess as FuelStation['truckAccess'] }),
+      ...(row.sourceUrl === undefined ? {} : { sourceUrl: row.sourceUrl as string }),
+      ...(row.priceVerifiedAt === undefined ? {} : { priceVerifiedAt: row.priceVerifiedAt as string }),
+      ...(row.address === undefined ? {} : { address: row.address as string }),
+      ...(row.truckParkingSpaces === undefined ? {} : { truckParkingSpaces: row.truckParkingSpaces as number }),
+      ...(row.defLanes === undefined ? {} : { defLanes: row.defLanes as number }),
       isAvailable: row.isAvailable as boolean, isSynthetic: row.isSynthetic as boolean,
     });
   });

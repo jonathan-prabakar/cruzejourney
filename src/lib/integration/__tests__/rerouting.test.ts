@@ -5,7 +5,7 @@ import { roadRoutes } from "../road-routes";
 import { geometryDistances } from "../road-geometry";
 import { createStationRoute, getStoredRoutePlan } from "../rerouting.server";
 import { validateDataset } from "../../telemetry/validator";
-const station = roadRoutes.austin.stations.find((s) => /Sam/.test(s.name))!;
+const station = roadRoutes.austin.stations.find((s) => s.id === "loves-960")!;
 const request = (body: unknown, origin = "http://localhost") =>
   new Request("http://localhost/api/route-to-station", {
     method: "POST",
@@ -124,21 +124,19 @@ describe("trusted station rerouting", () => {
     stubRoute();
     expect((await POST(request({ ...body, index: 239 }))).status).toBe(422);
   });
-  it("rate limits road service calls and blocks known truck exclusions", async () => {
+  it("rate limits road-service calls and refuses unlisted stations", async () => {
     stubRoute();
     globalState.cruzeRouteRequests = { start: Date.now(), count: 6 };
     expect((await POST(request(body))).status).toBe(429);
-    const excluded = roadRoutes.austin.stations.find(
-      (s) => s.truckAccess === "no",
-    )!;
+    globalState.cruzeRouteRequests = { start: Date.now(), count: 0 };
     expect(
-      (await POST(request({ ...body, stationId: excluded.id }))).status,
-    ).toBe(422);
-    expect(fetch).not.toHaveBeenCalled();
+      (await POST(request({ ...body, stationId: "unverified-station" }))).status,
+    ).toBe(400);
+    expect(roadRoutes.austin.stations.every((s) => s.truckAccess === "yes")).toBe(true);
   });
 });
 it.skipIf(process.env.RUN_OSRM_LIVE !== "1")(
-  "routes to Sam's Club with the actual public OSRM service",
+  "routes to a verified Love's truck stop with the actual public OSRM service",
   async () => {
     const plan = await createStationRoute("austin", 0, station.id);
     expect(plan.trip.road.geometry.coordinates.length).toBeGreaterThan(20);

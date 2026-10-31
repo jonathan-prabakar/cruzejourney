@@ -39,10 +39,13 @@ describe("road-based simulation", () => {
       expect(getDemoSnapshot(240, id, true).progress).toBeCloseTo(1);
       expect(r.dataset.records.at(-1)!.fuel_percent).toBeGreaterThan(0);
       for (const station of r.stations) {
-        expect(station.id).toMatch(/^osm-(node|way|relation)-\d+$/);
+        expect(station.id).toMatch(/^loves-\d+$/);
         expect(station.isSynthetic).toBe(false);
-        expect(station.pricePerGallon).toBeNull();
-        expect(station.priceSource).toBe("unknown");
+        expect(station.pricePerGallon).toBeGreaterThan(0);
+        expect(station.priceSource).toBe("verified");
+        expect(station.truckAccess).toBe("yes");
+        expect(station.sourceUrl).toMatch(/^https:\/\/www\.loves\.com\//);
+        expect(station.truckParkingSpaces).toBeGreaterThan(0);
         expect(station.detourMiles).toBeGreaterThan(0);
       }
       const snapshot = getDemoSnapshot(0, id, true);

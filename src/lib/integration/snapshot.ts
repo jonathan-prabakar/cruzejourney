@@ -8,7 +8,11 @@ import type { VehicleIntelligenceContext } from "../intelligence/types";
 
 export const demoDataset = demo;
 
-export const fuelConfig = { reservePercent: 10, uncertaintyMargin: 0 };
+export const fuelConfig = {
+  reservePercent: 10,
+  uncertaintyMargin: 0,
+  reachability: { allowBacktracking: true },
+};
 export function getDemoSnapshot(
   index: number,
   routeId: DemoRouteId = "austin",

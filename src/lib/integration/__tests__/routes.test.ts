@@ -21,7 +21,7 @@ describe("selectable synthetic destinations", () => {
       expect(getDemoSnapshot(160, id).health.activeCodes).toContain("P0301");
       expect(
         first.stations.every(
-          (s) => !s.isSynthetic && s.priceSource === "unknown",
+          (s) => !s.isSynthetic && s.priceSource === "verified" && s.truckAccess === "yes",
         ),
       ).toBe(true);
       expect(first.context.stations).toEqual(first.stations);
@@ -50,7 +50,7 @@ describe("selectable synthetic destinations", () => {
       }
     },
   );
-  it("never shares scenario timestamps and uses only OSM station IDs", () => {
+  it("never shares scenario timestamps and uses only verified Love's truck-stop IDs", () => {
     const timestamps = routeIds.flatMap((id) =>
       demoRoutes[id].dataset.records.map((r) => r.timestamp),
     );
@@ -58,7 +58,7 @@ describe("selectable synthetic destinations", () => {
     const stations = routeIds.flatMap((id) =>
       demoRoutes[id].stations.map((s) => s.id),
     );
-    expect(stations.every(id => id.startsWith("osm-"))).toBe(true);
+    expect(stations.every(id => id.startsWith("loves-"))).toBe(true);
   });
   it("reconstructs the selected route on the server and rejects unknown destinations", async () => {
     vi.stubEnv("GEMINI_API_KEY", "");

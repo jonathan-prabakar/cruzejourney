@@ -5,9 +5,14 @@ import elPaso from "../../data/road-routes/el-paso.json";
 import original from "../../data/demo-telemetry.json";
 import { DEMO_ROUTE_LENGTH_MILES } from "../fuel";
 import { validateFuelStations } from "../fuel/stations";
+import { verifiedTruckStops } from "@/data/verified-truck-stops";
 import type { VehicleTelemetry, TelemetryDataset } from "../telemetry/types";
 import { destinationDefinitions, routeIds, type DemoRouteId } from "./routes";
-import { geometryDistances, pointAtProgress } from "./road-geometry";
+import {
+  geometryDistances,
+  nearestRoutePosition,
+  pointAtProgress,
+} from "./road-geometry";
 const snapshots = { austin, dallas, houston, "el-paso": elPaso };
 export function createRoadRoute(id: DemoRouteId) {
   const road = snapshots[id];
@@ -62,18 +67,22 @@ export function createRoadRoute(id: DemoRouteId) {
     records,
   };
   const stationResult = validateFuelStations(
-    road.stations.map((station) => ({
-      ...station,
-      priceSource: "unknown",
-      truckAccess:
-        (station.tags as Record<string, string | undefined>).hgv === "no"
-          ? "no"
-          : ["yes", "designated"].includes(
-                (station.tags as Record<string, string | undefined>).hgv ?? "",
-              )
-            ? "yes"
-            : "unknown",
-    })),
+    verifiedTruckStops
+      .filter((station) => station.routeIds.includes(id))
+      .map((station) => {
+        const position = nearestRoutePosition(
+          road.geometry.coordinates,
+          cumulative,
+          [station.longitude!, station.latitude!],
+        );
+        const distanceFromRouteMiles = position.distanceFromRouteMeters / 1609.344;
+        return {
+          ...station,
+          distanceAlongRouteMiles: position.distanceAlongMeters / 1609.344,
+          // Conservative exit and rejoin allowance, derived from distance to road geometry.
+          detourMiles: Math.max(2, 1.5 + distanceFromRouteMiles * 2.6),
+        };
+      }),
   );
   if (!stationResult.valid) throw new Error(`Invalid road stations: ${id}`);
   const stations = stationResult.stations;

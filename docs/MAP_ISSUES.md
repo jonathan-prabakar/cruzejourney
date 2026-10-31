@@ -1,34 +1,38 @@
 # Map integration: ranked findings
 
-Reviewed October 31, 2026. These priorities distinguish confirmed defects, verification gaps and product/data limitations.
+Reviewed October 31, 2026. Priorities separate fixed behavior from product and verification gaps.
 
 ## Fixed in this branch
 
 | Priority | Finding | Resolution and evidence |
 | --- | --- | --- |
-| P0 | MapLibre 5.24.0 was affected by critical attribution XSS advisory GHSA-jrc7-96c5-q579. | Upgraded to 6.16.0 and configured its ESM worker using the official Next/Turbopack pattern. Build emits the hashed worker asset. Production dependency audit reports zero vulnerabilities. No exploitation was observed. |
-| P1 | Vehicle marker jumped between sparse telemetry coordinates. | Read-only continuous playback clock plus animation-frame positioning along actual road geometry. Pause, seek, reset and speed changes share the provider clock; obsolete frames are cancelled. |
-| P1 | No station reroute existed. | Validated same-origin server endpoint requests an OSRM route from the current reading to a selected OSM station. Routes become the actual simulation geometry/distance; fuel is conserved, previous diagnostics are retained, and the stop ends the replay. Old trip remains intact on failure. |
-| P1 | Hardcoded scenario indexes could exceed shortened station-route datasets. | Diagnostic seek resolves the signal's actual index; ending seek uses `total - 1`. Unavailable diagnostic scenarios are disabled. |
-| P1 | Fictional station locations remained in older runtime imports. | Deleted fictional station JSON, old M1 map/station exports and synthetic corridor-location generation. Application/default snapshots now use real mapped station records. Numeric test fixtures have null GPS coordinates and are test-only. |
-| P2 | Station markers were small and hard to find. | 44px targets, larger fuel icons, persistent station names, recommendation contrast, and a map Stations icon opening the complete saved station list. Browser visual QA remains outstanding. |
-| P2 | Long replay could not be demonstrated quickly. | Full-run 10/15/20-second choices alongside 1×/2×/5×. Selecting a timed run resets and starts it. Provider tests verify completion, interpolation, pause and disposal. |
-
-MapLibre advisory: https://github.com/maplibre/maplibre-gl-js/security/advisories/GHSA-jrc7-96c5-q579
+| P0 | MapLibre 5.24.0 had a critical attribution XSS advisory. | Upgraded to 6.16.0 and configured its ESM worker for Next/Turbopack. Production dependency audit was previously clean. |
+| P1 | Vehicle icon did not have a tested, stable road heading. | It now derives clockwise-from-north heading from the outgoing road segment on each animation frame, including turns and endpoints. Unit cases cover north/east/south/west and a turn. |
+| P1 | Station pins/labels collided or were hard to interpret when zoomed out; normal fuel stations were mixed in. | Replaced DOM pins with exact-coordinate GeoJSON for official Love's truck stops only. Counts cluster at overview zoom; diesel symbols and price labels appear when expanded. Overview bounds include both route and stops. Route-map tests cover clustering and station-click selection. |
+| P1 | Prices and truck suitability were unknown. | Active stops are limited to Love's pages that list diesel, truck parking and DEF lanes. The UI links each official page and displays its dated Auto Diesel price snapshot and parking/DEF details. Snapshots were checked 2026-10-31; they are not live prices. |
+| P1 | Low range did not automatically start a station route. | Once route safety becomes `INSUFFICIENT_RANGE`, the app makes one automatic route attempt to the current recommended confirmed truck stop. The server checks OSRM geometry and fuel reserve. User clicks on a stop still open its details and provide a manual **Route to this station** action. |
+| P1 | Healthy vehicles displayed a “No active code observed” summary. | The healthy-state health card is removed; actual warnings and incomplete data remain visible. |
+| P1 | Route ending could look unexplained. | The selected city is the normal destination. A successful fuel-stop reroute ends at that stop, shows a reroute notice and does not simulate refueling or continue to the city. |
+| P1 | MapLibre 5.24.0 was affected by GHSA-jrc7-96c5-q579. | Upgraded to 6.16.0. See the [MapLibre advisory](https://github.com/maplibre/maplibre-gl-js/security/advisories/GHSA-jrc7-96c5-q579). |
 
 ## Remaining work, in order
 
-1. **P1 — browser/WebGL and responsive verification before release.** A saved browser permission setting blocks `localhost:3000`, even after the user explicitly approved a new attempt in chat. No actual screenshots, GPU-render checks, desktop/mobile layout checks or browser-console audit were possible. Change the saved setting before retrying; do not bypass through another browser, port or raw protocol. Check station readability/collisions, controls and attribution, all destinations, station rerouting, and 10/15/20-second motion at 1440×900, 1280×720 and 390×844. This is a verification gap, not a claim that a rendering defect was observed.
-2. **P1 for multi-instance production — route sessions need shared persistence.** New station routes are stored in a bounded process-local map (32 plans, one-hour TTL). A restart, eviction or request reaching another server instance can lose the plan. The client falls back for AI errors and routing reports an expired session, but this is a demo architecture. Use shared storage before scaling beyond one process. The six-new-route-requests-per-minute guard is also per process; add a shared limiter for public scale.
-3. **P2 — public routing service reliability.** Live station routing requires internet and the public OSRM demo endpoint, with a 15-second timeout. Initial city routes remain bundled; routing failures preserve the paused old trip and show an error. Move to a supported/self-hosted routing provider for production. No API key is currently required.
-4. **P2 — truck suitability and station data completeness.** General OSRM driving routes do not enforce truck dimensions/weights. OSM station tags may be stale or missing; operation, opening hours, prices and stock are unverified. Diesel is not inferred when absent, and mapped `hgv=no` blocks routing/recommendation. The route list is all saved corridor records, not every gas station in Texas. El Paso has only four selected records. Improve entrance-aware truck routing and coverage as a separate data integration.
-5. **P2 — development dependencies.** Full `npm audit` still reports 16 moderate development-tool findings, propagated through minimatch/ESLint tooling. Production-only audit is clean. The audit suggests incompatible downgrades for parts of the chain; do not run `npm audit fix --force`. Plan compatible toolchain updates and rerun lint/tests/build.
-6. **P3 — cached station access allowance.** Default city-route feasibility conservatively charges an entire local access loop, not the exact additional detour. On a selected station route, that station is the destination with zero additional detour; other stations' new-route distances become unknown instead of retaining incorrect old-corridor measurements.
+1. **P1 — visual browser/WebGL verification.** A saved Chrome permission setting blocks `http://localhost:3000`, even though the user previously approved a visual check in chat. No screenshot, GPU rendering, responsive layout or browser-console review was possible. Do not retry through another browser, port, raw CDP or indirect screenshot path. Visual QA can resume after the saved setting changes.
+2. **P1 — truck-safe routing.** Stops are confirmed commercial-truck facilities, but the public OSRM route uses a general driving profile. It does not enforce truck height, weight, length, hazmat, turn or access restrictions. Replace with truck-aware routing before treating routes as operational guidance.
+3. **P1 — live price/availability feed.** Prices are official Love's Auto Diesel page snapshots checked 2026-10-31. They can change and are not refreshed at runtime. Pump stock, opening status and access availability are not live. Review the linked pages before a later demo or add a supported licensed feed.
+4. **P2 — route and stop coverage.** The app includes 12 unique Love's locations across four selected routes, not all Texas truck stops or chains. Price maintenance is currently manual. Store truck-parking/DEF details are operator-listed, not a guarantee of current capacity.
+5. **P2 — automatic reroute retry behavior.** The app attempts automatic rerouting once per selected city trip when fuel range is insufficient. If no stop is confirmed reachable, playback pauses with a visible reason. If the route service rejects the recommended stop, the user can select another listed stop manually. A coordinated multi-stop fallback could improve reliability.
+6. **P2 — public routing and server sessions.** Live routes use the public OSRM demo endpoint with a 15-second timeout. Route plans and six-per-minute rate limits are process-local (32 cached plans, one-hour TTL), so they are not multi-instance storage.
+7. **P2 — development dependencies.** Prior full audit results showed 16 moderate development-tool findings while `npm audit --omit=dev` was clean. Do not use `npm audit fix --force`; it proposed incompatible toolchain downgrades.
+8. **P3 — estimated access allowance.** Candidate reachability uses a conservative cross-track-based leave/rejoin allowance. The final selected-stop route uses OSRM, but that initial estimate is not a surveyed entrance route.
 
 ## Verification evidence
 
-- 340 tests passed; two opt-in checks skipped in the default suite (Gemma and live OSRM).
-- Explicit `RUN_OSRM_LIVE=1 npx vitest run src/lib/integration/__tests__/rerouting.test.ts`: five checks passed, including an actual public OSRM road route to the mapped Sam's Club.
-- TypeScript, ESLint and production build passed. Build emitted the MapLibre 6 worker asset.
-- `npm audit --omit=dev`: zero vulnerabilities.
-- No live Gemma inference was performed and no actual refueling, live vehicle data, live traffic or verified station availability is claimed.
+- `npm test`: **346 passed, 2 skipped** (Gemma and live OSRM are opt-in).
+- `npm run typecheck` and `npm run lint` passed.
+- `next build --webpack` passed. Default Turbopack build hit a sandbox `Operation not permitted` when its CSS processing tried to bind a local port; Webpack completed the production build.
+- Map tests verify cluster source/layers and that clicking a station feature opens the selected station details.
+- Road-geometry unit cases verify cardinal headings, turn direction, endpoint direction and nearest-road projection.
+- A live OSRM request to the new Love's coordinates was not run in this turn; the existing mocked reroute tests pass.
+- Browser visual QA is blocked by the saved browser setting described above.
+- Current fuel prices and truck facility facts come from individual official pages linked in `src/data/verified-truck-stops.ts`. No live price API, fuel-stock feed, live Gemma call, vehicle connection or automatic refueling is claimed.

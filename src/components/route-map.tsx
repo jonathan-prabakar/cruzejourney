@@ -1,8 +1,9 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Fuel, Layers, LocateFixed, Map as MapIcon } from "lucide-react";
-import type { Map as LibreMap, Marker } from "maplibre-gl";
+import type { GeoJSONSource, Map as LibreMap, Marker } from "maplibre-gl";
 import {
+  bearingAtProgress,
   geometryDistances,
   pointAtProgress,
 } from "@/lib/integration/road-geometry";
@@ -38,7 +39,6 @@ export default function RouteMap({
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<LibreMap | null>(null);
   const truck = useRef<Marker | null>(null);
-  const markers = useRef(new Map<string, HTMLButtonElement>());
   const latest = useRef({ telemetry, onStation });
   useEffect(() => {
     latest.current = { telemetry, onStation };
@@ -49,7 +49,14 @@ export default function RouteMap({
   const [follow, setFollow] = useState(true);
   const route = trip ?? roadRoutes[routeId];
   const overview = () => {
-    const coordinates = route.road.geometry.coordinates;
+    const coordinates = [
+      ...route.road.geometry.coordinates,
+      ...stations.flatMap((station) =>
+        station.latitude === null || station.longitude === null
+          ? []
+          : [[station.longitude, station.latitude]],
+      ),
+    ];
     const longitudes = coordinates.map((p) => p[0]),
       latitudes = coordinates.map((p) => p[1]);
     map.current?.fitBounds(
@@ -68,7 +75,6 @@ export default function RouteMap({
     let cancelled = false;
     let observer: ResizeObserver | undefined;
     const ownedMarkers: Marker[] = [];
-    const stationElements = markers.current;
     let ownedMap: LibreMap | undefined;
     import("maplibre-gl")
       .then((lib) => {
@@ -162,30 +168,153 @@ export default function RouteMap({
                 "fill-extrusion-opacity": 0.8,
               },
             });
-          stations.forEach((station) => {
-            if (station.latitude === null || station.longitude === null) return;
-            const button = document.createElement("button");
-            button.className = "real-station-marker";
-            button.setAttribute(
-              "aria-label",
-              `View mapped fuel station ${station.name}`,
-            );
-            button.title = station.name;
-            const label = document.createElement("span");
-            label.className = "station-pin-label";
-            label.textContent = station.name;
-            button.innerHTML =
-              '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M3 22V4a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v18M1 22h14M4 6h8v6H4m9 2h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9l-4-4m2 2v4h2"/></svg>';
-            button.appendChild(label);
-            button.addEventListener("click", () =>
-              latest.current.onStation(station, button),
-            );
-            stationElements.set(station.id, button);
-            ownedMarkers.push(
-              new lib.Marker({ element: button })
-                .setLngLat([station.longitude, station.latitude])
-                .addTo(instance),
-            );
+          const mappedStops = stations.filter(
+            (station) => station.latitude !== null && station.longitude !== null,
+          );
+          const stationById = new Map(mappedStops.map((station) => [station.id, station]));
+          instance.addSource("truck-stops", {
+            type: "geojson",
+            cluster: true,
+            clusterRadius: 48,
+            clusterMaxZoom: 9,
+            promoteId: "stationId",
+            data: {
+              type: "FeatureCollection",
+              features: mappedStops.map((station) => ({
+                type: "Feature" as const,
+                properties: {
+                  stationId: station.id,
+                  displayLabel: station.name.replace("Love's Travel Stop ", ""),
+                  priceLabel:
+                    station.pricePerGallon === null
+                      ? "price unknown"
+                      : `$${station.pricePerGallon.toFixed(2)}`,
+                },
+                geometry: {
+                  type: "Point" as const,
+                  coordinates: [station.longitude!, station.latitude!],
+                },
+              })),
+            },
+          });
+          instance.addLayer({
+            id: "truck-stop-clusters",
+            type: "circle",
+            source: "truck-stops",
+            filter: ["has", "point_count"],
+            paint: {
+              "circle-color": "#ffb547",
+              "circle-radius": [
+                "step",
+                ["get", "point_count"],
+                18,
+                5,
+                22,
+                10,
+                27,
+              ],
+              "circle-stroke-color": "#152638",
+              "circle-stroke-width": 3,
+            },
+          });
+          instance.addLayer({
+            id: "truck-stop-cluster-count",
+            type: "symbol",
+            source: "truck-stops",
+            filter: ["has", "point_count"],
+            layout: {
+              "text-field": ["get", "point_count_abbreviated"],
+              "text-size": 13,
+              "text-font": ["Noto Sans Regular"],
+            },
+            paint: { "text-color": "#122131" },
+          });
+          instance.addLayer({
+            id: "truck-stop-points",
+            type: "circle",
+            source: "truck-stops",
+            filter: ["!", ["has", "point_count"]],
+            paint: {
+              "circle-color": [
+                "case",
+                ["boolean", ["feature-state", "recommended"], false],
+                "#00d1a7",
+                "#ffb547",
+              ],
+              "circle-radius": ["interpolate", ["linear"], ["zoom"], 6, 10, 10, 13, 15, 16],
+              "circle-stroke-color": "#142536",
+              "circle-stroke-width": 3,
+            },
+          });
+          instance.addLayer({
+            id: "truck-stop-labels",
+            type: "symbol",
+            source: "truck-stops",
+            filter: ["!", ["has", "point_count"]],
+            minzoom: 10,
+            layout: {
+              "text-field": ["concat", ["get", "displayLabel"], " · ", ["get", "priceLabel"]],
+              "text-font": ["Noto Sans Regular"],
+              "text-size": 11,
+              "text-offset": [0, 1.55],
+              "text-anchor": "top",
+              "text-max-width": 14,
+              "text-optional": true,
+            },
+            paint: {
+              "text-color": "#fff5dc",
+              "text-halo-color": "#101923",
+              "text-halo-width": 1.5,
+            },
+          });
+          instance.addLayer({
+            id: "truck-stop-diesel-mark",
+            type: "symbol",
+            source: "truck-stops",
+            filter: ["!", ["has", "point_count"]],
+            layout: {
+              "text-field": "D",
+              "text-font": ["Noto Sans Regular"],
+              "text-size": 11,
+              "text-allow-overlap": true,
+            },
+            paint: { "text-color": "#162535" },
+          });
+          const chooseStop = (event: { features?: { properties?: Record<string, unknown> }[] }) => {
+            const id = event.features?.[0]?.properties?.stationId;
+            const station = typeof id === "string" ? stationById.get(id) : undefined;
+            if (station) latest.current.onStation(station, instance.getCanvas());
+          };
+          instance.on("click", "truck-stop-points", chooseStop);
+          instance.on("click", "truck-stop-diesel-mark", chooseStop);
+          instance.on("click", "truck-stop-labels", chooseStop);
+          instance.on("click", "truck-stop-clusters", async (event) => {
+            const feature = event.features?.[0];
+            const clusterId = feature?.properties?.cluster_id;
+            const coordinates = feature?.geometry;
+            const source = instance.getSource("truck-stops") as GeoJSONSource | undefined;
+            if (
+              typeof clusterId !== "number" ||
+              !coordinates || coordinates.type !== "Point" ||
+              !Array.isArray(coordinates.coordinates) || !source
+            ) return;
+            try {
+              const zoom = await source.getClusterExpansionZoom(clusterId);
+              if (!cancelled)
+                instance.easeTo({
+                  center: coordinates.coordinates as [number, number],
+                  zoom,
+                  duration: 350,
+                });
+            } catch {
+              // Keep the route usable if a tile worker cannot expand a cluster.
+            }
+          });
+          instance.on("mouseenter", "truck-stop-points", () => {
+            instance.getCanvas().style.cursor = "pointer";
+          });
+          instance.on("mouseleave", "truck-stop-points", () => {
+            instance.getCanvas().style.cursor = "";
           });
           const vehicle = document.createElement("div");
           vehicle.className = "real-truck-marker";
@@ -223,7 +352,6 @@ export default function RouteMap({
       ownedMap?.remove();
       map.current = null;
       truck.current = null;
-      stationElements.clear();
     };
   }, [route, stations]);
   useEffect(() => {
@@ -242,19 +370,9 @@ export default function RouteMap({
             );
       truck.current?.setLngLat(point);
       if (progress !== undefined) {
-        const ahead = pointAtProgress(
-          route.road.geometry.coordinates,
-          cumulative,
-          Math.min(1, progress + 0.00001),
+        truck.current?.setRotation(
+          bearingAtProgress(route.road.geometry.coordinates, cumulative, progress),
         );
-        const bearing =
-          (Math.atan2(
-            (ahead[0] - point[0]) * Math.cos((point[1] * Math.PI) / 180),
-            ahead[1] - point[1],
-          ) *
-            180) /
-          Math.PI;
-        truck.current?.setRotation(bearing);
       }
       if (follow)
         map.current?.jumpTo({
@@ -280,14 +398,18 @@ export default function RouteMap({
     telemetry.longitude,
   ]);
   useEffect(() => {
-    markers.current.forEach((button, id) =>
-      button.classList.toggle("recommended", id === recommendedId),
-    );
-  }, [recommendedId, ready]);
+    if (!ready || !map.current?.getSource("truck-stops")) return;
+    stations.forEach((station) => {
+      map.current?.setFeatureState(
+        { source: "truck-stops", id: station.id },
+        { recommended: station.id === recommendedId },
+      );
+    });
+  }, [recommendedId, ready, stations]);
   return (
     <section
       className="route-map real-route-map"
-      aria-label={`Real road map from San Antonio to ${route.destination}`}
+      aria-label={`Road map with verified truck stops from San Antonio to ${route.destination}`}
     >
       <div ref={container} className="real-map-container" />
       {status && (
@@ -298,10 +420,10 @@ export default function RouteMap({
       <div className="real-map-controls">
         <button
           type="button"
-          aria-label={`Show all ${stations.length} mapped gas stations`}
+          aria-label={`Show all ${stations.length} verified truck stops`}
           onClick={(event) => onStations?.(event.currentTarget)}
         >
-          <Fuel size={17} /> <span>Stations ({stations.length})</span>
+          <Fuel size={17} /> <span>Truck stops ({stations.length})</span>
         </button>
         <button
           type="button"

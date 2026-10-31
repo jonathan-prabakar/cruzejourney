@@ -25,7 +25,7 @@ describe("application integration snapshot", () => {
     expect(html).toContain("Driving cockpit");
     expect(html).toContain("28");
     expect(html).toContain("163.2");
-    expect(html).toContain("OSM STATIONS");
+    expect(html).toContain("VERIFIED TRUCK STOPS");
     expect(html).not.toContain("FICTIONAL STATIONS");
     expect(html).toContain("Destination");
     expect(html).not.toContain("Bluebonnet Travel Stop");
@@ -38,8 +38,14 @@ describe("application integration snapshot", () => {
     expect(s.fuel.fuel.usableRangeMiles).toBeCloseTo(67.2);
     expect(s.fuel.fuel.reserveGallons).toBe(12);
   });
-  it("displays an engine-selected station, not the M1 fixture", () =>
-    expect(getDemoSnapshot(0).stations.every(s => s.id.startsWith("osm-"))).toBe(true));
+  it("uses only sourced, truck-compatible fuel stops in the cockpit", () => {
+    expect(
+      getDemoSnapshot(0).stations.every(
+        (s) => s.id.startsWith("loves-") && s.truckAccess === "yes" &&
+          s.priceSource === "verified" && s.sourceUrl,
+      ),
+    ).toBe(true);
+  });
   it("returns a real no-reachable-station fallback at the critical ending", () => {
     const s = getDemoSnapshot(240);
     expect(s.fuel.status.fuelStatus).toBe("CRITICAL");

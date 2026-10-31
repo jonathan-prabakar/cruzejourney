@@ -72,7 +72,7 @@ describe("single integrated playback lifecycle", () => {
     expect(latest.snapshot.health.recentEvents).toEqual([]);
     await act(() => latest.reset());
     expect(latest.playback.index).toBe(0);
-    expect(latest.snapshot.stations.every(s => s.id.startsWith("osm-"))).toBe(true);
+    expect(latest.snapshot.stations.every(s => s.id.startsWith("loves-"))).toBe(true);
   });
   it("makes no AI POST calls when the key is unavailable, including playback ticks", async () => {
     await mount();

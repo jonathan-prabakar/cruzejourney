@@ -4,7 +4,7 @@ import {
   routeIds,
   type DemoRouteId,
 } from "@/lib/integration/routes";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import {
   ArrowRight,
@@ -139,11 +139,27 @@ function DrivingSession({
   const [details, setDetails] = useState(false);
   const [routing, setRouting] = useState(false);
   const [routingError, setRoutingError] = useState("");
+  const [routeNotice, setRouteNotice] = useState("");
   const routeAbort = useRef<AbortController | null>(null);
+  const routingLock = useRef(false);
+  const routeOperations = useRef({
+    pauseForRouting: app.pauseForRouting,
+    duration: playback.run_duration_seconds,
+  });
+  useEffect(() => {
+    routeOperations.current = {
+      pauseForRouting: app.pauseForRouting,
+      duration: playback.run_duration_seconds,
+    };
+  }, [app.pauseForRouting, playback.run_duration_seconds]);
+  const autoRerouteAttempted = useRef<string | null>(null);
   useEffect(() => () => routeAbort.current?.abort(), []);
-  const routeToStation = async (target: FuelStation) => {
-    if (routing) return;
-    const index = app.pauseForRouting();
+  const routeToStation = useCallback(async (target: FuelStation, automatic = false) => {
+    if (routingLock.current) return;
+    routingLock.current = true;
+    if (automatic)
+      setRouteNotice(`Fuel range is shorter than this trip. Rerouting to ${target.name}…`);
+    const index = routeOperations.current.pauseForRouting();
     const abort = new AbortController();
     routeAbort.current?.abort();
     routeAbort.current = abort;
@@ -165,16 +181,36 @@ function DrivingSession({
       if (!response.ok)
         throw new Error(data.error ?? "Unable to route to this stop.");
       if (!abort.signal.aborted)
-        onPlan(data as RoutePlan, playback.run_duration_seconds ?? null);
+        onPlan(data as RoutePlan, routeOperations.current.duration ?? null);
     } catch (error) {
-      if (!abort.signal.aborted)
-        setRoutingError(
-          error instanceof Error ? error.message : "Routing failed. Try again.",
-        );
+      if (!abort.signal.aborted) {
+        const message = error instanceof Error ? error.message : "Routing failed. Try again.";
+        setRoutingError(message);
+        if (automatic) setRouteNotice(`Automatic fuel-stop reroute failed: ${message}`);
+      }
     } finally {
+      routingLock.current = false;
       if (!abort.signal.aborted) setRouting(false);
     }
-  };
+  }, [onPlan, plan, routeId]);
+  useEffect(() => {
+    if (plan || fuel.status.routeSafety !== "INSUFFICIENT_RANGE") return;
+    const key = `${routeId}:original-trip`;
+    if (autoRerouteAttempted.current === key) return;
+    autoRerouteAttempted.current = key;
+    if (!recommendation || recommendation.truckAccess !== "yes") {
+      routeOperations.current.pauseForRouting();
+      return;
+    }
+    queueMicrotask(() => void routeToStation(recommendation, true));
+  }, [plan, routeId, fuel.status.routeSafety, recommendation, routeToStation]);
+  const visibleRouteNotice =
+    routeNotice ||
+    (!plan &&
+    fuel.status.routeSafety === "INSUFFICIENT_RANGE" &&
+    (!recommendation || recommendation.truckAccess !== "yes")
+      ? "No confirmed truck stop is reachable within modeled fuel range. Replay paused; select a reachable stop or seek assistance."
+      : "");
   const progress = Math.round(snapshot.progress * 100);
   const fuelState = fuel.status.fuelStatus.toLowerCase();
   const selected = fuel.recommendation.assessments.find(
@@ -212,7 +248,7 @@ function DrivingSession({
         ? "Review coolant warning"
         : health.overallStatus === "UNKNOWN"
           ? "Health data incomplete"
-          : "No active code observed";
+          : "Health status normal";
   return (
     <div className={`cockpit fuel-${fuelState}`}>
       <a className="skip-link" href="#instruments">
@@ -329,9 +365,20 @@ function DrivingSession({
           <h3>{recommendation?.name ?? "No eligible mapped stop"}</h3>
           <p className="checkpoint-area">
             {recommendation
-              ? "Mapped diesel stop · routed access"
+              ? "Official diesel · truck parking listed"
               : fuel.status.recommendedAction}
           </p>
+          {visibleRouteNotice && (
+            <p role="status" className="route-notice">
+              {visibleRouteNotice}
+            </p>
+          )}
+          {plan && (
+            <p role="status" className="route-notice">
+              Rerouted to {plan.trip.destination}. The replay ends at this stop;
+              refueling is not simulated.
+            </p>
+          )}
           <div className="checkpoint-stats">
             <div>
               <strong>
@@ -353,7 +400,11 @@ function DrivingSession({
                   ? "—"
                   : `$${recommendation.pricePerGallon.toFixed(2)}`}
               </strong>
-              <span>price unknown</span>
+              <span>
+                {recommendation?.priceVerifiedAt
+                  ? `official · ${recommendation.priceVerifiedAt}`
+                  : "price unknown"}
+              </span>
             </div>
           </div>
           <p className="checkpoint-reason">
@@ -382,22 +433,24 @@ function DrivingSession({
           </button>
         </section>
         <div className="vehicle-comms">
-          <button
-            className={`comms-button ${health.overallStatus === "HIGH" || health.overallStatus === "WARNING" ? "caution-comms" : ""}`}
-            onClick={(e) => openInspection("health", e.currentTarget)}
-          >
-            <span className="comms-icon">
-              <Activity size={19} />
-            </span>
-            <span>
-              <strong>{healthTitle}</strong>
-              <small>
-                {health.overallStatus} · {health.recentEvents.length} observed
-                episodes
-              </small>
-            </span>
-            <ChevronRight size={17} />
-          </button>
+          {(health.activeCodes.length > 0 || health.overallStatus !== "INFO") && (
+            <button
+              className={`comms-button ${health.overallStatus === "HIGH" || health.overallStatus === "WARNING" ? "caution-comms" : ""}`}
+              onClick={(e) => openInspection("health", e.currentTarget)}
+            >
+              <span className="comms-icon">
+                <Activity size={19} />
+              </span>
+              <span>
+                <strong>{healthTitle}</strong>
+                <small>
+                  {health.overallStatus} · {health.recentEvents.length} observed
+                  episodes
+                </small>
+              </span>
+              <ChevronRight size={17} />
+            </button>
+          )}
           <button
             className="comms-button efficiency-comms"
             onClick={(e) => openInspection("intelligence", e.currentTarget)}
@@ -423,7 +476,7 @@ function DrivingSession({
           <span className="route-key" /> Planned route{" "}
           <span className="vehicle-key" /> Simulated vehicle{" "}
           <span className="schematic-label">
-            OSM STATIONS · SIMULATED DRIVE
+            VERIFIED TRUCK STOPS · SIMULATED DRIVE
           </span>
         </div>
       </main>
@@ -623,15 +676,14 @@ function DrivingSession({
       {station && (
         <InspectionDialog title={station.name} onClose={close}>
           <span className="detail-tag">
-            OPENSTREETMAP STATION · {selected?.status ?? "UNKNOWN"}
+            VERIFIED TRUCK STOP · {selected?.status ?? "UNKNOWN"}
           </span>
           <p className="fine-print">
-            Mapped location; current operation, hours and fuel stock are
-            unverified. Diesel:{" "}
-            {station.fuelTypes.includes("diesel") ? "listed in OSM" : "unknown"}
-            . Truck access: {station.truckAccess ?? "unknown"}. No live fuel
-            prices.
+            The official Love&apos;s page lists {station.truckParkingSpaces} truck
+            parking spaces, {station.defLanes} DEF lanes and diesel. These
+            facilities do not confirm current pump availability or truck-legal routing.
           </p>
+          {station.address && <p>{station.address}</p>}
           <p>
             {selected?.explanation ??
               "Reachability is unavailable for this reading."}
@@ -641,7 +693,9 @@ function DrivingSession({
               {station.pricePerGallon == null
                 ? "Unknown"
                 : `$${station.pricePerGallon.toFixed(2)}`}
-              <small>per gallon · no live price feed</small>
+              <small>
+                Auto Diesel per gallon · official price checked {station.priceVerifiedAt ?? "date unavailable"}
+              </small>
             </strong>
             <div>
               <b>{number(selected?.routeDistanceMiles)} mi</b>
@@ -675,7 +729,7 @@ function DrivingSession({
             className="primary-button"
             disabled={
               routing ||
-              station.truckAccess === "no" ||
+              station.truckAccess !== "yes" ||
               playback.status === "ended"
             }
             onClick={() => void routeToStation(station)}
@@ -685,17 +739,19 @@ function DrivingSession({
           </button>
           <p className="fine-print">
             Routes from the current replay position and ends at this stop. Does
-            not simulate purchasing fuel. Selecting a 10/15/20-second run starts
-            the new route.
+            not simulate purchasing fuel. Road routing uses a general driving
+            profile, not truck-specific dimensions or restrictions.
           </p>
-          <a
-            className="outline-button"
-            href={`https://www.openstreetmap.org/${station.id.replace("osm-", "").replace("-", "/")}`}
-            target="_blank"
-            rel="noreferrer"
-          >
-            View source on OpenStreetMap
-          </a>
+          {station.sourceUrl && (
+            <a
+              className="outline-button"
+              href={station.sourceUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Official station details and current price
+            </a>
+          )}
           <button className="primary-button" onClick={close}>
             Back to the run <ArrowRight size={16} />
           </button>
@@ -742,23 +798,23 @@ function DrivingSession({
             <p key={w.code}>{w.explanation}</p>
           ))}
           <p className="fine-print">
-            Simulated vehicle readings on cached road routes. Station locations
-            are mapped in OpenStreetMap; prices, opening status, diesel stock
-            and truck access are not live verified. The entire routed local
-            access loop is charged before arrival as a conservative allowance.
-            Routes use a driving profile, not truck-specific navigation.
+            Simulated vehicle readings on cached road routes. Stops are
+            confirmed from official Love&apos;s pages that list truck parking,
+            DEF lanes and diesel. Listed facilities do not confirm current pump
+            availability. Prices were checked 2026-10-31 and are not live; the
+            router uses a general driving profile, not truck-specific navigation.
           </p>
         </InspectionDialog>
       )}
       {inspection === "stops" && (
         <InspectionDialog
-          title={`Mapped gas stations (${snapshot.stations.length})`}
+          title={`Verified truck stops (${snapshot.stations.length})`}
           onClose={close}
         >
           <p>
-            All saved stations for this trip. Opening status, stock and truck
-            access may be unknown. Select a station for details and a road
-            route.
+            Every stop on this map is listed by Love&apos;s with diesel,
+            commercial-truck parking and DEF lanes. Prices are checked
+            snapshots; operating status and pump availability are not live.
           </p>
           <p>{fuel.recommendation.explanation}</p>
           <div className="stop-list">
@@ -772,10 +828,8 @@ function DrivingSession({
                   <strong>{a.station.name}</strong>
                   <small>
                     {a.status} ·{" "}
-                    {a.station.fuelTypes.includes("diesel")
-                      ? "Diesel mapped"
-                      : "Fuel type unknown"}{" "}
-                    ·{" "}
+                    {a.station.truckParkingSpaces} truck spaces ·{" "}
+                    {a.station.defLanes} DEF lanes ·{" "}
                     {a.station.distanceAlongRouteMiles === null
                       ? "Route position unknown"
                       : `${number(Math.abs(a.station.distanceAlongRouteMiles - (route.currentDistanceAlongRouteMiles ?? 0)))} mi ${a.station.distanceAlongRouteMiles < (route.currentDistanceAlongRouteMiles ?? 0) ? "behind" : "along route"}`}

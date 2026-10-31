@@ -61,9 +61,9 @@ export async function createStationRoute(
     station.isSynthetic
   )
     throw new RoutingError("Choose a mapped station from this route.");
-  if (station.truckAccess === "no")
+  if (station.truckAccess !== "yes")
     throw new RoutingError(
-      "This location is mapped as unsuitable for heavy goods vehicles.",
+      "Routing is limited to locations with confirmed commercial-truck services.",
       422,
     );
   const current = getDemoSnapshot(index, routeId, true, base);

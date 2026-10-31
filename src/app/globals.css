@@ -1987,9 +1987,7 @@ select {
 .real-map-controls button { display: flex; align-items: center; gap: 5px; padding: 8px; background: #101b28; color: #dbeafe; border: 1px solid #41668a; border-radius: 5px; font-size: 11px; cursor: pointer; }
 .real-map-controls button[aria-pressed="true"] { color: #00d1a7; border-color: #00d1a7; }
 .real-map-controls button:disabled { opacity: .5; cursor: wait; }
-.real-map-controls button:focus-visible, .real-station-marker:focus-visible { outline: 2px solid #00d1a7; outline-offset: 3px; }
-.real-station-marker { width: 28px; height: 28px; display: grid; place-items: center; border: 1px solid #81a8ce; background: #152b40; color: #e2efff; border-radius: 5px; cursor: pointer; }
-.real-station-marker.recommended { background: #00d1a7; color: #082d29; border-color: #d9fff5; }
+.real-map-controls button:focus-visible { outline: 2px solid #00d1a7; outline-offset: 3px; }
 .real-truck-marker { width: 38px; height: 38px; border: 3px solid #082d29; border-radius: 50%; background: #00d1a7; color: #082d29; display: grid; place-items: center; }
 .map-load-status { position: absolute; top: 145px; left: 20px; max-width: min(420px, 80%); padding: 10px; background: #101b28; color: #dbeafe; font-size: 12px; }
 .real-route-map .maplibregl-ctrl-attrib { font-size: 10px; }
@@ -1999,14 +1997,8 @@ select {
 /* Keep mandatory source attribution reachable above the cockpit caption. */
 .real-route-map .maplibregl-ctrl-attrib-button { min-width: 24px; min-height: 24px; }
 
-/* Fuel stops have a stable icon, a clear label and a generous target. */
-.real-station-marker { width: 44px; height: 44px; border: 2px solid #dbeafe; background: #1b4a70; color: #fff; border-radius: 9px; box-shadow: 0 4px 10px #0008; position: relative; z-index: 2; }
-.real-station-marker > svg { width: 23px; height: 23px; }
-.real-station-marker:hover, .real-station-marker:focus-visible { z-index: 5; background: #245e8d; }
-.station-pin-label { position: absolute; top: calc(100% + 3px); left: 50%; transform: translateX(-50%); padding: 3px 6px; background: #0a0f1cef; color: #e7f3ff; border-radius: 4px; max-width: 135px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font: 11px Arial, sans-serif; pointer-events: none; }
-.real-station-marker.recommended { border-color: #ecfff9; background: #00d1a7; }
-.real-station-marker.recommended .station-pin-label { color: #8bffe1; }
 .return-to-trip { position: absolute; left: 25px; top: 90px; padding: 7px 10px; color: #dbeafe; background: #101b28; border: 1px solid #41668a; border-radius: 5px; font-size: 11px; cursor: pointer; }
 .routing-error { color: #fca5a5; }
+.route-notice { margin: 4px 0; padding: 7px 9px; color: #baffea; border: 1px solid #1c6f5c; background: #06251f9e; font-size: 11px; line-height: 1.4; }
 .real-map-controls { flex-wrap: wrap; max-width: min(350px, calc(100% - 30px)); justify-content: flex-end; }
-@media(max-width:600px) { .station-pin-label { font-size: 10px; max-width: 100px; } .return-to-trip { left: 18px; top: 78px; font-size: 10px; } .real-map-controls { top: 110px; } }
+@media(max-width:600px) { .return-to-trip { left: 18px; top: 78px; font-size: 10px; } .real-map-controls { top: 110px; } }
