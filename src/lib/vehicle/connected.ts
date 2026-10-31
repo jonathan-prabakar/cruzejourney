@@ -1,5 +1,6 @@
 import demo from '../../data/demo-telemetry.json';
 import { calculateJourneyPlan, DEFAULT_PREFERENCES, PLANNING_MPG } from '../journey/planner';
+import { fuelOptions, remainingRoad } from './fuel-options';
 import { buildCuratedRoute } from '../journey/routes';
 import { generateSimulationFrames, initialJourneyFrame, JourneySimulation } from '../journey/simulation';
 import type { TelemetryProvider, VehicleTelemetry, PlaybackState } from '../telemetry/types';
@@ -12,7 +13,7 @@ export interface VehicleEfficiencyAdapter {
   evaluate(current: VehicleTelemetry, history: readonly VehicleTelemetry[]): EfficiencyFinding | null;
 }
 export const unavailableEfficiency: VehicleEfficiencyAdapter = { evaluate: () => null };
-export interface JourneySelector { originId: string; destinationId: string; elapsedSeconds: number }
+export interface JourneySelector { originId: string; destinationId: string; elapsedSeconds: number; stationId?: string; continuation?: boolean }
 export const INITIAL_VEHICLE_TELEMETRY: Readonly<VehicleTelemetry> = Object.freeze({ ...demo.records[0] });
 export const MAX_DEMO_JOURNEYS = 16;
 
@@ -21,7 +22,7 @@ export function planFromTelemetry(originId: string, destinationId: string, telem
   return calculateJourneyPlan({
     route: buildCuratedRoute(originId, destinationId), refillPolicy: 'route-needed',
     preferences: { ...DEFAULT_PREFERENCES, startingFuelPercent: telemetry.fuel_percent,
-      fuelStops: 'automatic', optimization: 'balanced', amenities: [], scenario: 'combined' },
+      fuelStops: 'automatic', optimization: 'fuel-cost', amenities: [], scenario: 'combined' },
   });
 }
 export function segmentFrames(planning: JourneyPlanningResult, seed: VehicleTelemetry) {
@@ -32,26 +33,47 @@ export function segmentFrames(planning: JourneyPlanningResult, seed: VehicleTele
 export function replayConnectedJourneys(selectors: readonly JourneySelector[]) {
   if (!selectors.length || selectors.length > MAX_DEMO_JOURNEYS) throw new Error('Demo journey history limit reached.');
   let seed: VehicleTelemetry = { ...INITIAL_VEHICLE_TELEMETRY };
+  let tripDistanceMiles = 0;
   let totalAdded = 0, totalCost: number | null = 0;
-  let result: { planning: JourneyPlanningResult; frames: SimulationFrame[]; frame: SimulationFrame; seed: VehicleTelemetry; totalAdded: number; totalCost: number | null } | undefined;
+  let result: { planning: JourneyPlanningResult; frames: SimulationFrame[]; frame: SimulationFrame; seed: VehicleTelemetry; totalAdded: number; totalCost: number | null; tripDistanceMiles: number } | undefined;
   for (const selector of selectors) {
-    if (!selector || Object.keys(selector).sort().join(',') !== 'destinationId,elapsedSeconds,originId' ||
+    if (!selector || Object.keys(selector).some(k => !['originId','destinationId','elapsedSeconds','stationId','continuation'].includes(k)) ||
+      (selector.stationId !== undefined && typeof selector.stationId !== 'string') ||
+      (selector.continuation !== undefined && selector.continuation !== true) ||
       typeof selector.originId !== 'string' || typeof selector.destinationId !== 'string' ||
       !Number.isFinite(selector.elapsedSeconds) || selector.elapsedSeconds < 0) throw new Error('Invalid journey selector.');
-    const planning = planFromTelemetry(selector.originId, selector.destinationId, seed);
+    let route = buildCuratedRoute(selector.originId, selector.destinationId);
+    let planningMpg = PLANNING_MPG;
+    if (selector.continuation) {
+      if (!result || result.planning.requested.baseRoute.origin.id !== selector.originId ||
+          result.planning.requested.baseRoute.destination.id !== selector.destinationId ||
+          result.frame.phase === 'fuel-stop' || !selector.stationId) throw new Error('Invalid route continuation.');
+      const comparison = fuelOptions(result.planning, result.frame);
+      if (!comparison.needed || !comparison.options.some(o => o.station.id === selector.stationId)) throw new Error('Stop is no longer reachable.');
+      route = remainingRoad(result.planning.requested.baseRoute, result.frame.baseRouteMiles);
+      planningMpg = comparison.planningMpg;
+    }
+    const planning = selector.stationId ? calculateJourneyPlan({
+      route, planningMpg, refillPolicy: 'route-needed',
+      preferences: { ...DEFAULT_PREFERENCES, optimization: 'fuel-cost', startingFuelPercent: seed.fuel_percent, amenities: [] },
+      waypoints: [{ kind: 'fuel', id: selector.stationId }],
+    }) : planFromTelemetry(selector.originId, selector.destinationId, seed);
+    if (selector.stationId && !planning.requested.feasible) throw new Error('Stop is not feasible.');
     const frames = segmentFrames(planning, seed);
     const frame = frames.find(f => Math.abs(f.elapsedSeconds - selector.elapsedSeconds) < 1e-6);
     if (!frame) throw new Error('Unknown canonical telemetry frame.');
+    if (!selector.continuation) tripDistanceMiles = 0;
+    tripDistanceMiles += frame.distanceMiles;
     totalAdded += frame.fuelAddedGallons;
     totalCost = totalCost === null || frame.purchaseCost === null ? null : totalCost + frame.purchaseCost;
-    result = { planning, frames, frame, seed: { ...seed }, totalAdded, totalCost };
+    result = { planning, frames, frame, seed: { ...seed }, totalAdded, totalCost, tripDistanceMiles };
     seed = { ...frame.telemetry };
   }
   return result!;
 }
 export interface ConnectedSnapshot {
   planning: JourneyPlanningResult; frame: SimulationFrame; playback: PlaybackState;
-  departure: VehicleTelemetry; totalAdded: number; totalCost: number | null; revision: number;
+  tripDistanceMiles: number; departure: VehicleTelemetry; totalAdded: number; totalCost: number | null; revision: number;
 }
 export interface DemoPlaybackController {
   readonly frames: readonly SimulationFrame[];
@@ -71,6 +93,7 @@ export interface VehicleNavigationProvider extends VehicleTelemetryProvider {
   getEfficiency(): EfficiencyFinding | null;
   getJourneySelectors(): JourneySelector[] | undefined;
   planJourney(originId: string, destinationId: string): void;
+  acceptStation?(stationId: string): void;
 }
 /** One session, one active M2 clock. Route changes replace its dataset, not vehicle readings. */
 export class ConnectedVehicleSession implements VehicleNavigationProvider {
@@ -84,6 +107,7 @@ export class ConnectedVehicleSession implements VehicleNavigationProvider {
   private listeners = new Set<() => void>();
   private engine: JourneySimulation | null = null;
   private disconnect: (() => void) | null = null;
+  private baseTripDistance = 0;
   private baseAdded = 0;
   private baseCost: number | null = 0;
   frames: readonly SimulationFrame[];
@@ -92,7 +116,7 @@ export class ConnectedVehicleSession implements VehicleNavigationProvider {
     const result = replayConnectedJourneys([this.selector]);
     this.frames = result.frames;
     this.state = { planning: result.planning, frame: result.frame, departure: result.seed, revision: 0,
-      totalAdded: 0, totalCost: 0, playback: this.readyState() };
+      tripDistanceMiles: 0, totalAdded: 0, totalCost: 0, playback: this.readyState() };
   }
   private readyState(): PlaybackState {
     return { status: 'ready', speed: 1, index: 0, total: this.frames.length, progress: 0, elapsed_ms: 0,
@@ -108,7 +132,7 @@ export class ConnectedVehicleSession implements VehicleNavigationProvider {
     this.engine = new JourneySimulation(this.state.planning.requested, 'combined', undefined, this.state.departure);
     this.disconnect = this.engine.subscribe(() => {
       const next = this.engine!.getSnapshot();
-      this.state = { ...this.state, ...next,
+      this.state = { ...this.state, ...next, tripDistanceMiles: this.baseTripDistance + next.frame.distanceMiles,
         totalAdded: this.baseAdded + next.frame.fuelAddedGallons,
         totalCost: this.baseCost === null || next.frame.purchaseCost === null ? null : this.baseCost + next.frame.purchaseCost };
       this.emit();
@@ -120,21 +144,45 @@ export class ConnectedVehicleSession implements VehicleNavigationProvider {
     return () => { this.listeners.delete(listener); if (!this.listeners.size) this.engine?.pause(); };
   };
   planJourney(originId: string, destinationId: string) {
+    this.install({ originId, destinationId, elapsedSeconds: 0 });
+  }
+  acceptStation(stationId: string) {
+    const before = this.state;
+    const comparison = fuelOptions(before.planning, before.frame);
+    if (before.frame.phase === 'fuel-stop' || !comparison.needed ||
+        !comparison.options.some(o => o.station.id === stationId)) throw new Error('This stop is no longer available ahead.');
+    this.install({ originId: this.selector.originId, destinationId: this.selector.destinationId,
+      elapsedSeconds: 0, stationId, continuation: true });
+  }
+  private install(selector: JourneySelector) {
     if (this.completed.length + 1 >= MAX_DEMO_JOURNEYS) throw new Error('This demo supports 16 successive route plans per session. Reload to start a new demo connection.');
     const completed = [...this.completed.map(s => ({ ...s })), { ...this.selector, elapsedSeconds: this.state.frame.elapsedSeconds }];
-    const selector = { originId, destinationId, elapsedSeconds: 0 };
     // Validate and calculate before changing any owned state.
     const result = replayConnectedJourneys([...completed, selector]);
     this.engine?.pause(); this.disconnect?.(); this.engine?.dispose(); this.engine = null;
+    this.baseTripDistance = selector.continuation ? this.state.tripDistanceMiles : 0;
     this.baseAdded = this.state.totalAdded; this.baseCost = this.state.totalCost;
     this.completed = completed; this.selector = selector; this.frames = result.frames;
     this.state = { planning: result.planning, frame: result.frame, departure: result.seed,
-      totalAdded: result.totalAdded, totalCost: result.totalCost, revision: this.state.revision + 1, playback: this.readyState() };
+      tripDistanceMiles: result.tripDistanceMiles, totalAdded: result.totalAdded, totalCost: result.totalCost, revision: this.state.revision + 1, playback: this.readyState() };
     this.attach(); this.emit();
   }
   play = () => { this.attach(); this.engine?.play(); };
   pause = () => this.engine?.pause();
-  reset = () => { this.state = { ...this.state, revision: this.state.revision + 1 }; this.engine?.reset(); this.emit(); };
+  reset = () => {
+    if (!this.selector.continuation) { this.state = { ...this.state, revision: this.state.revision + 1 }; this.engine?.reset(); this.emit(); return; }
+    const history = this.getJourneySelectors();
+    const first = history.findLastIndex(s => !s.continuation);
+    const completed = history.slice(0, first);
+    const selector = { ...history[first], elapsedSeconds: 0 };
+    const result = replayConnectedJourneys([...completed, selector]);
+    this.engine?.pause(); this.disconnect?.(); this.engine?.dispose(); this.engine = null;
+    this.baseAdded = result.totalAdded; this.baseCost = result.totalCost; this.baseTripDistance = 0;
+    this.completed = completed; this.selector = selector; this.frames = result.frames;
+    this.state = { planning: result.planning, frame: result.frame, departure: result.seed, tripDistanceMiles: 0,
+      totalAdded: result.totalAdded, totalCost: result.totalCost, revision: this.state.revision + 1, playback: this.readyState() };
+    this.attach(); this.emit();
+  };
   seekTo = (index: number) => { this.state = { ...this.state, revision: this.state.revision + 1 }; this.engine?.seekTo(index); this.emit(); };
   setPlaybackSpeed = (speed: 1 | 2 | 5) => this.engine?.setPlaybackSpeed(speed);
   dispose = () => { this.disconnect?.(); this.engine?.dispose(); this.listeners.clear(); };

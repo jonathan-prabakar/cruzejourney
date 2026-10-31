@@ -41,6 +41,7 @@ export function compactJourneyFacts(context: JourneyIntelligenceContext) {
   const summarize = (p: JourneyIntelligenceContext['plan']) => ({
     id: p.id, feasible: p.feasible, distanceMiles: p.totalDistanceMiles, durationSeconds: p.durationSeconds,
     arrivalFuelPercent: p.arrivalFuelPercent, purchaseCost: p.purchaseCost,
+    proposal: context.proposals?.some(proposal => proposal.id === p.id) ?? false,
     stationIds: p.fuelStops.map(s => s.station.id), amenityIds: p.amenityStops.map(a => a.id),
   });
   return {
@@ -50,7 +51,7 @@ export function compactJourneyFacts(context: JourneyIntelligenceContext) {
     origin: context.plan.baseRoute.origin.name, destination: context.plan.baseRoute.destination.name,
     preferences: context.plan.preferences, progressMiles: context.frame.distanceMiles,
     phase: context.frame.phase, elapsedSeconds: context.frame.elapsedSeconds,
-    current: summarize(context.plan), alternatives: context.alternatives.slice(0, 4).map(summarize),
+    current: summarize(context.plan), alternatives: [...(context.proposals ?? []), ...context.alternatives].slice(0, 4).map(summarize),
     fictionalAmenities: context.amenities.map(a => ({
       id: a.id, stationId: a.stationId, name: a.name, category: a.category, modeledAccessMiles: a.extraDistanceMiles,
     })),
@@ -63,7 +64,7 @@ export function journeyCoreInput(context: JourneyIntelligenceContext): ExistingG
     route: { currentDistanceAlongRouteMiles: context.frame.baseRouteMiles,
       remainingRouteMiles: context.frame.remainingDistanceMiles, distanceSource: 'simulated' },
     stations: context.fuel.recommendation.assessments.map(a => a.station), requiredFuelType: 'diesel',
-    fuelConfig: { planningMpg: PLANNING_MPG, reservePercent: 10 },
+    fuelConfig: { planningMpg: context.fuel.fuel.planningMpg ?? PLANNING_MPG, reservePercent: 10 },
     diagnostics: { available: true, findings: context.diagnostics }, efficiency: context.efficiency ?? null, demoMode: true,
     journey: compactJourneyFacts(context),
   };
@@ -84,7 +85,7 @@ export function bridgeExistingGemmaCore(analyzeVehicleIntelligence: (
       const insight = result.insights.find(i => i.source === 'gemma4');
       if (!insight) throw new IntelligenceError('INVALID_OUTPUT');
       const stationId = insight.relatedStationId ?? null;
-      const selected = [context.plan, ...context.alternatives].find(p =>
+      const selected = [context.plan, ...context.alternatives, ...(context.proposals ?? [])].find(p =>
         p.feasible && (stationId === null || p.fuelStops.some(s => s.station.id === stationId)));
       if (!selected) throw new IntelligenceError('INVALID_OUTPUT');
       const decision: JourneyDecision = result.journeyDecision ?? {

@@ -32,7 +32,7 @@ npm run test:e2e
 npm run intelligence:live
 ```
 
-Open http://localhost:3003/journey or the connected vehicle view at /. Reload the page after configuring the server key. GET /api/intelligence reports configuration readiness only, never proof of successful inference. The live command explicitly loads exported variables first, then .env.local, then .env. Ordinary automated tests mock inference and do not load your local key.
+Open http://localhost:3003/. The retired /journey URL redirects to the main dashboard. Reload the page after configuring the server key. GET /api/intelligence reports configuration readiness only, never proof of successful inference. The live command explicitly loads exported variables first, then .env.local, then .env. Ordinary automated tests mock inference and do not load your local key.
 
 The live command makes a minimal connectivity request and a real combined-journey assessment. Missing/obvious placeholder keys skip live requests with: **Live Gemma 4 test blocked: API key not configured.**
 

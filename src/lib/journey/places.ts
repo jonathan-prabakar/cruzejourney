@@ -1,3 +1,4 @@
+import truckStations from '../../data/journey/truck-stations.json';
 import { getDemoFuelStations } from '../fuel/stations';
 import { positionAt } from './geometry';
 import { roadAxisMiles } from './routes';
@@ -6,13 +7,19 @@ import type { Amenity, AmenityCategory, JourneyRoute, JourneyStation, PlacesProv
 export function stationsForRoute(route: JourneyRoute): JourneyStation[] {
   const axisStart = roadAxisMiles(route.origin.id), axisEnd = roadAxisMiles(route.destination.id);
   const full = roadAxisMiles('austin'), span = Math.abs(axisEnd - axisStart);
-  return getDemoFuelStations().flatMap((s, i) => {
+  const catalog = [...getDemoFuelStations(), ...truckStations.map(s => ({
+    id: s.id, name: s.name, latitude: null, longitude: null, distanceAlongRouteMiles: s.axisMiles,
+    detourMiles: s.detour, fuelTypes: ['diesel'], isAvailable: true, isSynthetic: true,
+    pricePerGallon: s.price, priceSource: 'sample' as const,
+  }))];
+  return catalog.flatMap((s, i) => {
     const global = s.distanceAlongRouteMiles! / 75.5 * full;
     if (global <= Math.min(axisStart, axisEnd) || global >= Math.max(axisStart, axisEnd)) return [];
-    const distance = Math.abs(global - axisStart) / span * route.distanceMiles;
+    const distance = Math.abs(global - axisStart) / span * (route.fullDistanceMiles ?? route.distanceMiles) - (route.offsetMiles ?? 0);
+    if (distance <= 0 || distance >= route.distanceMiles) return [];
     const coordinate = positionAt(route, distance);
-    const amenities: AmenityCategory[] = i % 3 === 0 ? ['restaurant', 'restroom', 'coffee', 'convenience'] : i % 2 === 0 ? ['restaurant', 'restroom', 'convenience'] : ['restroom', 'coffee'];
-    return [{ ...s, distanceAlongRouteMiles: distance, latitude: coordinate[1], longitude: coordinate[0], coordinate, amenities }];
+    const amenities: AmenityCategory[] = truckStations.find(t => t.id === s.id)?.amenities as AmenityCategory[] ?? (i % 3 === 0 ? ['restaurant', 'restroom', 'coffee', 'convenience'] : i % 2 === 0 ? ['restaurant', 'restroom', 'convenience'] : ['restroom', 'coffee']);
+    return [{ ...s, truckAccess: 'assumed-demo' as const, distanceAlongRouteMiles: distance, latitude: coordinate[1], longitude: coordinate[0], coordinate, amenities }];
   }).sort((a, b) => a.distanceAlongRouteMiles! - b.distanceAlongRouteMiles!);
 }
 const labels: Record<AmenityCategory, string> = {

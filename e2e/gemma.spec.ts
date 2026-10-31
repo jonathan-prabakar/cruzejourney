@@ -29,36 +29,63 @@ test.beforeEach(async ({ page }) => {
   // Mocked inference only. Ordinary browser tests must never spend the configured live key.
   await page.route('**/api/intelligence', route => route.fulfill({ json: { available: true, model: 'gemma-4-26b-a4b-it', status: 'CONFIGURED_NOT_TESTED' } }));
 });
-test('shows analyzing, validated advice, evidence and clears future-code advice on reset (mocked model)', async ({ page }) => {
+test('translates validated model advice into short map alerts and keeps details behind diagnostics (mocked inference)', async ({ page }) => {
   await page.route('**/api/intelligence/journey', async route => {
-    const result = await approvedMock(route.request().postDataJSON());
-    await new Promise(resolve => setTimeout(resolve, 300));
-    await route.fulfill({ json: result });
+    await route.fulfill({ json: await approvedMock(route.request().postDataJSON()) });
   });
-  await page.goto('/journey');
-  await expect(page.getByText('ANALYZING', { exact: true })).toBeVisible();
-  await expect(page.getByText('GEMMA 4 ACTIVE', { exact: true })).toBeVisible();
-  await page.getByRole('slider', { name: 'Seek journey simulation' }).press('Home');
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Developer diagnostics', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: 'Developer diagnostics' })).toContainText('Gemma 4 active');
+  await page.getByRole('button', { name: 'Close diagnostics' }).click();
   const demo = new ConnectedVehicleSession();
   const onset = demo.frames.findIndex(f => f.telemetry.diagnostic_code === 'P0301'); demo.dispose();
-  for (let i = 0; i < onset; i++) await page.getByRole('slider', { name: 'Seek journey simulation' }).press('ArrowRight');
-  await expect(page.getByText('P0301 observed in simulation', { exact: true })).toBeVisible();
-  await expect(page.locator('.jp-ai-card')).toContainText('Observed codes: P0301', { timeout: 10000 });
-  await page.getByText('Decision evidence', { exact: true }).click();
-  await expect(page.locator('.jp-ai-card')).toContainText('Cylinder 1 misfire');
+  const seek = page.getByRole('slider', { name: 'Seek drive simulation' }); await seek.press('Home');
+  for (let i = 0; i < onset; i++) await seek.press('ArrowRight');
+  await expect(page.getByTestId('navigation-alert')).toContainText('Engine warning');
   await page.getByRole('button', { name: 'Reset simulation', exact: true }).click();
-  await expect(page.locator('.jp-ai-card')).not.toContainText('Observed codes: P0301');
-  await expect(page.getByText('No simulated diagnostic code', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('navigation-alert')).not.toContainText('Engine warning');
 });
-test('shows model unavailable and explicit retry recovers with validated mocked inference', async ({ page }) => {
-  let calls = 0;
+test('keeps API errors out of the driver view while exposing honest fallback diagnostics', async ({ page }) => {
+  await page.route('**/api/intelligence/journey', route => route.fulfill({ json: { source:'fallback', model:null, error:{code:'RATE_LIMIT'}, insights:[] } }));
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Developer diagnostics', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: 'Developer diagnostics' })).toContainText('rate limit');
+  await page.getByRole('button', { name: 'Close diagnostics' }).click();
+  await expect(page.getByTestId('recommended-station')).toBeVisible();
+  await expect(page.getByTestId('navigation-alert')).not.toContainText('rate limit');
+});
+
+test('highlights a model-selected feasible proposal without automatically applying its route (mocked inference)', async ({ page }) => {
+  let selectedName = '';
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
   await page.route('**/api/intelligence/journey', async route => {
-    calls++;
-    await route.fulfill({ json: calls === 1 ? { source: 'fallback', model: null, error: { code: 'UNKNOWN_MODEL' }, insights: [] } : await approvedMock(route.request().postDataJSON()) });
+    const { core, journey } = resolveJourneyContext(route.request().postDataJSON());
+    const current = journey.plan.fuelStops[0].station.id;
+    const proposed = journey.proposals!.find(p => p.fuelStops[0].station.id !== current)!;
+    const station = proposed.fuelStops[0].station;
+    selectedName = station.name;
+    const decision: ModelDecision = {
+      topPriority: 'ai-alternative',
+      insights: [{ id:'ai-alternative',category:'fuel',priority:'critical',relationship:'station_tradeoff',
+        evidenceIds:['fuel.percent','station.'+station.id],actions:['refuel'],stationId:station.id,diagnosticCodes:[],confidence:'limited' }],
+      journeyChoice:{selectedPlanId:proposed.id,stationId:station.id,amenityId:null},
+    };
+    const result = await analyzeVehicleIntelligence(core, { model:{modelId:'gemma-4-26b-a4b-it',generate:async()=>JSON.stringify(decision)} });
+    await gate;
+    await route.fulfill({json:result});
   });
-  await page.goto('/journey');
-  await expect(page.getByText('MODEL UNAVAILABLE', { exact: true })).toBeVisible();
-  await expect(page.locator('.jp-ai-card [role=status]')).toContainText('unsupported');
-  await page.getByRole('button', { name: 'Reassess journey' }).click();
-  await expect(page.getByText('GEMMA 4 ACTIVE', { exact: true })).toBeVisible({ timeout: 10000 });
+  await page.goto('/');
+  const activePath = await page.getByTestId('active-route').getAttribute('points');
+  release();
+  await expect.poll(()=>selectedName).not.toBe('');
+  await expect.poll(async()=>await page.getByTestId('recommended-station').getAttribute('aria-label')).toContain(selectedName);
+  await page.getByRole('button',{name:'Developer diagnostics',exact:true}).click();
+  await expect(page.getByRole('complementary',{name:'Developer diagnostics'})).toContainText('Gemma 4 active');
+  await page.getByRole('button',{name:'Close diagnostics'}).click();
+  // The suggested station is advisory; the active plan is unchanged until explicit acceptance.
+  await page.getByTestId('recommended-station').locator('rect').click();
+  await expect(page.getByRole('button',{name:'Review detour',exact:true})).toBeVisible();
+  await expect(page.getByTestId('proposed-route')).toHaveCount(0);
+  expect(await page.getByTestId('active-route').getAttribute('points')).toBe(activePath);
 });

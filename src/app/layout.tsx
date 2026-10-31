@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import "./journey/journey.css";
 import { ConnectedVehicleProvider } from "@/components/connected-vehicle-provider";
 export const metadata: Metadata = {
-  title: "Cruze FuelSense · Journey intelligence",
+  title: "Cruze Journey · Intelligent driving",
   icons: {
     icon: [
       { url: "/brand/favicon.ico", sizes: "any" },

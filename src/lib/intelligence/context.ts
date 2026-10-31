@@ -65,7 +65,7 @@ export function prepareIntelligenceContext(input: VehicleIntelligenceContext): P
   const reachableStations = [fuel.recommendation.recommended, ...fuel.recommendation.alternatives]
     .filter((s): s is NonNullable<typeof s> => s !== null && s.reachability.status === 'REACHABLE');
   // Scope model actions to reviewed itineraries; M3's full calculation stays unchanged.
-  const reviewed = input.journey ? (input.journey.progressMiles > 0 ? [input.journey.current]
+  const reviewed = input.journey ? (input.journey.progressMiles > 0 ? [input.journey.current, ...input.journey.alternatives.filter(p => p.proposal)]
     : [input.journey.current, ...input.journey.alternatives]).filter(p => p.feasible) : null;
   const eligibleStations = reviewed ? reachableStations.filter(s => reviewed.some(p => p.stationIds.includes(s.station.id))) : reachableStations;
   const facts: EvidenceFact[] = [];

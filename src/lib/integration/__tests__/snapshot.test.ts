@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Dashboard from "../../../components/dashboard";
+import { ConnectedVehicleProvider } from "../../../components/connected-vehicle-provider";
 import {
   demoDataset,
   getDemoSnapshot,
@@ -20,11 +21,12 @@ const request = (body: unknown, origin = "http://localhost") =>
   });
 describe("application integration snapshot", () => {
   it("server-renders the cockpit with the real initial M2 reading", () => {
-    const html = renderToStaticMarkup(React.createElement(Dashboard));
-    expect(html).toContain("Driving cockpit");
+    const html = renderToStaticMarkup(React.createElement(ConnectedVehicleProvider, null, React.createElement(Dashboard)));
+    expect(html).toContain("Start Drive");
     expect(html).toContain("28");
-    expect(html).toContain("163.2");
-    expect(html).toContain("Guadalupe Demo Truck Stop");
+    expect(html).toContain('data-testid="vehicle-fuel">17.0');
+    expect(html).toContain("RECOMMENDED FUEL STOP");
+    expect(html).not.toContain("Journey planner");
     expect(html).not.toContain("Bluebonnet Travel Stop");
   });
   it("calculates the initial fuel and reserve from current telemetry", () => {

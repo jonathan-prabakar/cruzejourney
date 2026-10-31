@@ -1,0 +1,13 @@
+.jp-location { position:relative; }
+.jp-location label,.jp-field { color:#9eb4c9; font-size:11px; display:block; margin-bottom:7px; }
+.jp-input-wrap { display:flex; gap:8px; align-items:center; border:1px solid #2b4155; background:#121f2e; padding:10px; border-radius:7px; color:#00d1a7; }
+.jp-input-wrap:focus-within { border-color:#00b696; box-shadow:0 0 0 2px #00d1a714; }
+.jp-input-wrap input { border:0; outline:none; background:none; color:#e3edf7; min-width:0; width:100%; font:12px Arial,sans-serif; }
+.jp-endpoints { position:relative; display:grid; gap:19px; }
+.jp-swap { position:absolute; right:10px; top:54px; z-index:2; width:29px; height:29px; border:1px solid #35516a; background:#142539; border-radius:50%; display:grid; place-items:center; }
+.jp-suggestions { position:absolute; z-index:20; top:100%; margin-top:5px; width:100%; background:#192a3d; border:1px solid #3a526b; border-radius:7px; box-shadow:0 12px 28px #0007; overflow:hidden; }
+.jp-suggestions button { display:block; width:100%; padding:11px; text-align:left; border-bottom:1px solid #293f55; }
+.jp-suggestions button:hover { background:#243e51; }
+.jp-suggestions strong { display:block; font-size:12px; }
+.jp-suggestions small { display:block; color:#9db3c9; font-size:10px; margin-top:2px; }
+.jp-suggestions p { padding:12px; font-size:11px; }

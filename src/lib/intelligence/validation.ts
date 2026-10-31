@@ -89,7 +89,7 @@ export function validateModelDecision(text: string, context: PreparedContext): D
     const journey = context.journey;
     const plan = [journey.current, ...journey.alternatives].find(p => p.id === choice.selectedPlanId && p.feasible);
     const top = proposals.find(p => p.id === value.topPriority)!;
-    if (!plan || (journey.progressMiles > 0 && plan.id !== journey.current.id) ||
+    if (!plan || (journey.progressMiles > 0 && plan.id !== journey.current.id && !plan.proposal) ||
         choice.stationId !== top.stationId ||
         (choice.stationId !== null && (!plan.stationIds.includes(choice.stationId) ||
           !context.eligibleStations.some(s => s.station.id === choice.stationId))) ||

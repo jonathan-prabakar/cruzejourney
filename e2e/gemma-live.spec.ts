@@ -1,7 +1,7 @@
 import { ConnectedVehicleSession } from '../src/lib/vehicle/connected';
 import { expect, test } from '@playwright/test';
 
-test('LIVE: actual server Gemma advice reaches the combined-condition journey panel', async ({ page }) => {
+test('LIVE: actual server Gemma decisions reach the main driving dashboard', async ({ page }) => {
   test.skip(process.env.RUN_GEMMA_BROWSER_LIVE !== '1', 'Explicit opt-in only; ordinary browser tests make no live API requests.');
   test.setTimeout(60000);
   let release!: () => void;
@@ -12,17 +12,17 @@ test('LIVE: actual server Gemma advice reaches the combined-condition journey pa
     await gate;
     try { await route.continue(); } catch { /* Strict Mode may abort its first GET. */ }
   });
-  await page.goto('/journey');
+  await page.goto('/');
   await expect(page.locator('[data-playback-ready=true]')).toBeVisible();
-  await page.getByRole('button', { name: 'Start simulation', exact: true }).click();
+  await page.getByRole('button', { name: 'Start Drive', exact: true }).click();
   await expect(page.getByTestId('vehicle-distance')).not.toHaveText(/^0.0/);
   await page.getByRole('button', { name: 'Pause simulation', exact: true }).click();
-  const seek = page.getByRole('slider', { name: 'Seek journey simulation' });
+  const seek = page.getByRole('slider', { name: 'Seek drive simulation' });
   await seek.press('Home');
   const demo = new ConnectedVehicleSession();
   const onset = demo.frames.findIndex(f => f.telemetry.diagnostic_code === 'P0301'); demo.dispose();
   for (let i = 0; i < onset; i++) await seek.press('ArrowRight');
-  await expect(page.getByText('P0301 observed in simulation', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('navigation-alert')).toContainText('Engine warning');
   const response = page.waitForResponse(r => r.url().endsWith('/api/intelligence/journey') && r.request().method() === 'POST');
   release();
   const received = await response;
@@ -31,7 +31,8 @@ test('LIVE: actual server Gemma advice reaches the combined-condition journey pa
   expect(result.error, result.error?.message).toBeNull();
   expect(result.source).toBe('gemma4');
   expect(result.model).toBe('gemma-4-26b-a4b-it');
-  await expect(page.getByText('GEMMA 4 ACTIVE', { exact: true })).toBeVisible({ timeout: 35000 });
-  await expect(page.locator('.jp-ai-card')).toContainText('Observed codes: P0301');
-  await page.screenshot({ path: 'artifacts/gemma4-live-combined-journey.png', fullPage: true });
+  await page.getByRole('button', { name: 'Developer diagnostics', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: 'Developer diagnostics' })).toContainText('Gemma 4 active', { timeout: 35000 });
+  await page.getByRole('button', { name: 'Close diagnostics' }).click();
+  await page.screenshot({ path: 'artifacts/gemma4-live-driving-dashboard.png', fullPage: true });
 });

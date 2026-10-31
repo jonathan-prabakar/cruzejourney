@@ -1,5 +1,7 @@
 # Gemma 4 live vehicle intelligence
 
+> Current product entry is the single dashboard at /. The separate planner page is retired; see [MAP_FIRST_DASHBOARD.md](MAP_FIRST_DASHBOARD.md) for the latest interface and verification. Earlier milestone history is retained below.
+
 > The current read-only driver workflow and provider architecture are documented in [CONNECTED_VEHICLE_EXPERIENCE.md](CONNECTED_VEHICLE_EXPERIENCE.md). This document also retains the earlier milestone/activation history.
 
 ## Existing systems reused

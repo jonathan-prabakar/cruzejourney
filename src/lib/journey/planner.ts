@@ -17,12 +17,13 @@ export const DEFAULT_PREFERENCES: JourneyPreferences = {
 };
 const wantedCount = { automatic: null, none: 0, one: 1, two: 2, three: 3 } as const;
 const dwell: Record<Amenity['category'], number> = { restaurant: 1200, restroom: 300, coffee: 420, convenience: 300 };
-interface PlannerInput { refillPolicy?: 'full' | 'route-needed'; route: JourneyRoute; preferences: JourneyPreferences; waypoints?: JourneyWaypoint[] }
+interface PlannerInput { planningMpg?: number; refillPolicy?: 'full' | 'route-needed'; route: JourneyRoute; preferences: JourneyPreferences; waypoints?: JourneyWaypoint[] }
 interface Node { waypoint: JourneyWaypoint; name: string; position: number; access: number | null; station?: JourneyStation; amenity?: Amenity }
 
 export function evaluateItinerary(input: PlannerInput, waypoints: readonly JourneyWaypoint[],
   stations = stationsForRoute(input.route), amenities = amenitiesForRoute(stations)): JourneyPlan {
   const { route, preferences } = input;
+  const planningMpg = input.planningMpg ?? PLANNING_MPG;
   const warnings: string[] = [];
   if (!['automatic', 'none', 'one', 'two', 'three'].includes(preferences.fuelStops) ||
       !['balanced', 'fastest', 'fuel-cost', 'fewer-stops'].includes(preferences.optimization) ||
@@ -56,7 +57,7 @@ export function evaluateItinerary(input: PlannerInput, waypoints: readonly Journ
   if (feasible) {
     for (const node of [...nodes, { waypoint: { id: 'destination', kind: 'amenity' as const }, name: route.destination.name,
       position: route.distanceMiles, access: 0 } as Node]) {
-      const fuel = calculateFuelRange({ tankCapacityGallons: TANK_GALLONS, fuelPercent: gallons / TANK_GALLONS * 100, mpg: PLANNING_MPG, reservePercent: 10 });
+      const fuel = calculateFuelRange({ tankCapacityGallons: TANK_GALLONS, fuelPercent: gallons / TANK_GALLONS * 100, mpg: planningMpg, reservePercent: 10 });
       const travel = node.position - current + node.access!;
       if (node.waypoint.id !== 'destination') {
         const candidate = node.station ?? {
@@ -73,8 +74,8 @@ export function evaluateItinerary(input: PlannerInput, waypoints: readonly Journ
         warnings.push('Destination is beyond usable planning range with the 10% tank reserve. Add a confirmed reachable refueling stop.');
         feasible = false; break;
       }
-      const arrival = gallons - travel / PLANNING_MPG;
-      const target = input.refillPolicy === 'route-needed' ? Math.min(TANK_GALLONS, (totalDistanceMiles - distance - travel) / PLANNING_MPG + TANK_GALLONS * 0.1 + 1) : TANK_GALLONS;
+      const arrival = gallons - travel / planningMpg;
+      const target = input.refillPolicy === 'route-needed' ? Math.min(TANK_GALLONS, (totalDistanceMiles - distance - travel) / planningMpg + TANK_GALLONS * 0.1 + 1) : TANK_GALLONS;
       const added = node.station ? Math.max(0, target - arrival) : 0;
       const purchaseCost = node.station ? node.station.pricePerGallon === null ? null : added * node.station.pricePerGallon : 0;
       gallons = arrival + added; purchases += added; distance += travel; current = node.position;
@@ -90,15 +91,18 @@ export function evaluateItinerary(input: PlannerInput, waypoints: readonly Journ
   const augmented = itineraryGeometry(route, geometryNodes.map(n => ({ baseRouteMiles: n.position, accessMiles: n.access ?? 0 })));
   const fuelStops = legs.filter(l => l.kind === 'fuel').map(leg => ({ station: stations.find(s => s.id === leg.waypointId)!, leg, refillTargetPercent: leg.departureFuelGallons / TANK_GALLONS * 100 }));
   let hash = 2166136261;
-  for (const char of JSON.stringify([preferences, waypoints, input.refillPolicy ?? 'full'])) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
+  // IDs identify a semantic plan, not engine-specific last-bit floating point differences.
+  const stableFuel = Number.isFinite(preferences.startingFuelPercent) ? Number(preferences.startingFuelPercent.toFixed(8)) : preferences.startingFuelPercent;
+  const stableMpg = Number.isFinite(planningMpg) ? Number(planningMpg.toFixed(8)) : planningMpg;
+  for (const char of JSON.stringify([{ ...preferences, startingFuelPercent: stableFuel }, waypoints, input.refillPolicy ?? 'full', stableMpg])) hash = Math.imul(hash ^ char.charCodeAt(0), 16777619);
   return {
-    refillPolicy: input.refillPolicy ?? 'full',
+    refillPolicy: input.refillPolicy ?? 'full', planningMpg,
     id: route.id + ':' + (hash >>> 0).toString(16),
     baseRoute: route, route: augmented, preferences: structuredClone(preferences), waypoints: waypoints.map(w => ({ ...w })), legs, fuelStops,
     amenityStops: nodes.flatMap(n => n.amenity ? [n.amenity] : []),
     feasible, warnings, totalDistanceMiles,
     durationSeconds: route.durationSeconds + nodes.reduce((s, n) => s + (n.access ?? 0) / 20 * 3600, 0) + legs.reduce((s, l) => s + l.dwellSeconds, 0),
-    estimatedConsumptionGallons: feasible ? totalDistanceMiles / PLANNING_MPG : null,
+    estimatedConsumptionGallons: feasible ? totalDistanceMiles / planningMpg : null,
     arrivalFuelPercent: feasible ? gallons / TANK_GALLONS * 100 : null, purchaseCost: feasible ? cost : null, fuelAddedGallons: purchases,
   };
 }

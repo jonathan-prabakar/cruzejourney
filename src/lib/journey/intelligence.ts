@@ -1,5 +1,6 @@
 import { IntelligenceError, sanitizeError } from '../intelligence/errors';
 import type { SanitizedIntelligenceError } from '../intelligence/types';
+import { fuelOptions } from '../vehicle/fuel-options';
 import { calculateFuelIntelligence } from '../fuel/intelligence';
 import { evaluateItinerary, JOURNEY_VEHICLE, PLANNING_MPG } from './planner';
 import { rawDiagnosticAdapter } from './simulation';
@@ -7,13 +8,16 @@ import type { JourneyIntelligenceAdapter, JourneyIntelligenceContext, JourneyIns
 
 export function makeJourneyIntelligenceContext(planning: JourneyPlanningResult, frame: SimulationFrame, diagnosticsAdapter: DiagnosticsAdapter = rawDiagnosticAdapter): JourneyIntelligenceContext {
   const plan = planning.requested;
+  const liveMpg = frame.phase === 'driving' && frame.telemetry.mpg > 0 ? Math.min(PLANNING_MPG, frame.telemetry.mpg) : plan.planningMpg ?? PLANNING_MPG;
   const fuel = calculateFuelIntelligence({
     telemetry: frame.telemetry, vehicle: JOURNEY_VEHICLE,
     route: { currentDistanceAlongRouteMiles: frame.baseRouteMiles, remainingRouteMiles: frame.remainingDistanceMiles, distanceSource: 'simulated' },
     stations: planning.stations.map(s => ({ ...s, detourMiles: frame.stopId === s.id && frame.phase === 'fuel-stop' ? 0 : s.detourMiles })),
-    requiredFuelType: 'diesel', config: { planningMpg: PLANNING_MPG, reservePercent: 10 },
+    requiredFuelType: 'diesel', config: { planningMpg: liveMpg, reservePercent: 10 },
   });
+  const compared = fuelOptions(planning, frame);
   return { plan, alternatives: [planning.recommended, ...planning.alternatives].filter((p): p is NonNullable<typeof p> => p !== null && p.id !== plan.id),
+    proposals: compared.needed ? compared.options.slice(0, 4).map(o => o.plan) : [],
     frame, fuel, diagnostics: diagnosticsAdapter.evaluate(frame.telemetry), amenities: planning.amenities };
 }
 export function deterministicJourneyInsight(context: JourneyIntelligenceContext): JourneyInsight {
@@ -40,9 +44,9 @@ export function validateJourneyDecision(value: JourneyDecision, context: Journey
   if (!value || Object.keys(value).sort().join(',') !== ['source','model','priority','strategy','selectedPlanId','stationId','amenityId','diagnosticCodes'].sort().join(',') ||
       !['critical','high','medium','low'].includes(value.priority)) return false;
   if (value.source !== 'gemma4' || !['gemma-4-26b-a4b-it', 'gemma-4-31b-it'].includes(value.model)) return false;
-  const eligiblePlans = [context.plan, ...context.alternatives].filter(p => p.feasible);
+  const eligiblePlans = [context.plan, ...context.alternatives, ...(context.proposals ?? [])].filter(p => p.feasible);
   const selected = eligiblePlans.find(p => p.id === value.selectedPlanId);
-  if (!selected || (context.frame.distanceMiles > 0 && selected.id !== context.plan.id)) return false;
+  if (!selected || (context.frame.distanceMiles > 0 && selected.id !== context.plan.id && !context.proposals?.some(p => p.id === selected.id))) return false;
   if (!['refuel', 'evaluate-first', 'combine-break', 'monitor', 'seek-assistance'].includes(value.strategy)) return false;
   if (value.stationId !== null && (!selected.fuelStops.some(s => s.station.id === value.stationId) ||
       !context.fuel.recommendation.assessments.some(a => a.station.id === value.stationId && a.status === 'REACHABLE'))) return false;
@@ -85,9 +89,9 @@ export function createJourneyGemmaAdapter(delegate: (context: JourneyIntelligenc
       if (signal.aborted || !validateJourneyDecision(decision, context)) throw new Error('Journey decision rejected.');
       const station = context.fuel.recommendation.assessments.find(a => a.station.id === decision.stationId);
       const amenity = context.amenities.find(a => a.id === decision.amenityId);
-      const plan = [context.plan, ...context.alternatives].find(p => p.id === decision.selectedPlanId)!;
+      const plan = [context.plan, ...context.alternatives, ...(context.proposals ?? [])].find(p => p.id === decision.selectedPlanId)!;
       return {
-        source: 'gemma4', priority: decision.priority,
+        source: 'gemma4', strategy: decision.strategy, priority: decision.priority,
         title: decision.strategy === 'combine-break' ? 'Combine a feasible refill and break' : decision.strategy === 'evaluate-first' ? 'Evaluate the diagnostic concern first' : 'Gemma journey strategy',
         explanation: 'Gemma selected ' + decision.strategy + ' for ' + plan.route.origin.name + ' → ' + plan.route.destination.name + '. ' +
           (station ? station.explanation + ' ' : '') +
@@ -128,9 +132,10 @@ export class JourneyIntelligenceCoordinator {
     if (this.disposed) return;
     const fingerprint = JSON.stringify([context.plan.id, epoch, context.fuel.status.fuelStatus, context.fuel.status.routeSafety,
       context.frame.phase, context.frame.stopId,
-      context.fuel.recommendation.recommended?.station.id,
+      context.fuel.recommendation.recommended?.station.id, context.proposals?.[0]?.fuelStops[0]?.station.id,
       context.fuel.recommendation.assessments.filter(a => a.status === 'REACHABLE').map(a => a.station.id),
-      context.diagnostics.map(d => [d.code, d.severity]), context.efficiency?.status]);
+      context.diagnostics.map(d => [d.code, d.severity]), context.efficiency?.status,
+      Math.floor((context.fuel.fuel.planningMpg ?? PLANNING_MPG) * 2) / 2]);
     const key = JSON.stringify([context.plan.id, context.frame.telemetry, context.fuel.status, context.frame.stopId]);
     if (fingerprint === this.fingerprint && (!force || (this.active && !this.active.signal.aborted && this.activeKey === key))) return;
     this.fingerprint = fingerprint;

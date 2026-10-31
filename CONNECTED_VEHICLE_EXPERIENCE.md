@@ -1,5 +1,7 @@
 # Cruze FuelSense connected vehicle experience
 
+> Current product entry is the single dashboard at /. The separate planner page is retired; see [MAP_FIRST_DASHBOARD.md](MAP_FIRST_DASHBOARD.md) for the latest interface and verification. Earlier milestone history is retained below.
+
 ## Product and current implementation
 
 Production vision: connect an authenticated vehicle, choose a destination, and let telemetry, deterministic engines and Gemma monitor the journey. This implementation is a **synthetic OBD-II/ELD stand-in**. No Bluetooth, serial, CAN, OBD device, ELD service or physical vehicle is connected or controlled.

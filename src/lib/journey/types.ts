@@ -15,6 +15,8 @@ export interface JourneyPreferences {
 }
 export interface JourneyRoute {
   id: string;
+  offsetMiles?: number;
+  fullDistanceMiles?: number;
   origin: JourneyLocation;
   destination: JourneyLocation;
   coordinates: Coordinate[];
@@ -31,6 +33,7 @@ export interface RouteProvider {
   route(originId: string, destinationId: string, signal?: AbortSignal): Promise<JourneyRoute>;
 }
 export interface JourneyStation extends FuelStation {
+  truckAccess?: 'assumed-demo';
   coordinate: Coordinate;
   amenities: AmenityCategory[];
 }
@@ -76,6 +79,7 @@ export interface FuelStop {
 }
 export interface JourneyPlan {
   refillPolicy?: 'full' | 'route-needed';
+  planningMpg?: number;
   baseRoute: JourneyRoute;
   id: string;
   route: JourneyRoute;
@@ -135,6 +139,7 @@ export interface JourneyDiagnostic {
 }
 export interface DiagnosticsAdapter { evaluate(telemetry: VehicleTelemetry): JourneyDiagnostic[] }
 export interface JourneyIntelligenceContext {
+  proposals?: JourneyPlan[];
   efficiency?: import('../intelligence/types').EfficiencyFinding | null;
   connectedJourneys?: { originId: string; destinationId: string; elapsedSeconds: number }[];
   plan: JourneyPlan;
@@ -145,6 +150,7 @@ export interface JourneyIntelligenceContext {
   amenities: Amenity[];
 }
 export interface JourneyInsight {
+  strategy?: 'refuel' | 'evaluate-first' | 'combine-break' | 'monitor' | 'seek-assistance';
   model?: string;
   analyzedAt?: string;
   telemetryTimestamp?: string;

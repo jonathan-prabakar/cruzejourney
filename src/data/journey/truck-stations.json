@@ -1,0 +1,58 @@
+[
+  {
+    "id": "truck-11",
+    "name": "Mission Freight Plaza",
+    "axisMiles": 14,
+    "price": 3.49,
+    "detour": 0.25,
+    "amenities": [
+      "restroom",
+      "coffee",
+      "convenience"
+    ],
+    "isSynthetic": true,
+    "truckAccess": "assumed-demo"
+  },
+  {
+    "id": "truck-12",
+    "name": "Comal Diesel Yard",
+    "axisMiles": 32,
+    "price": 3.09,
+    "detour": 5.2,
+    "amenities": [
+      "restaurant",
+      "restroom",
+      "convenience"
+    ],
+    "isSynthetic": true,
+    "truckAccess": "assumed-demo"
+  },
+  {
+    "id": "truck-13",
+    "name": "San Marcos Freight Hub",
+    "axisMiles": 48,
+    "price": 3.39,
+    "detour": 0.2,
+    "amenities": [
+      "restaurant",
+      "restroom",
+      "coffee"
+    ],
+    "isSynthetic": true,
+    "truckAccess": "assumed-demo"
+  },
+  {
+    "id": "truck-14",
+    "name": "Kyle Truck Exchange",
+    "axisMiles": 66,
+    "price": 3.45,
+    "detour": 0.35,
+    "amenities": [
+      "restroom",
+      "coffee",
+      "convenience"
+    ],
+    "isSynthetic": true,
+    "truckAccess": "assumed-demo"
+  }
+]
