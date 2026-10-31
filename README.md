@@ -2,6 +2,8 @@
 
 **Drive Smarter. Further.**
 
+Video Demo Link: https://youtu.be/ojO7sdBFloQ
+
 Fuel-aware truck journeys on real roads, with simulated vehicle telemetry, verified truck-stop locations, explicit refueling events, and optional Gemma 4 advice.
 
 ## Open the live demo
