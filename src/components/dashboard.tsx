@@ -1,5 +1,5 @@
 "use client";
-import { demoRoutes, routeIds, type DemoRouteId } from "@/lib/integration/routes";
+import { destinationDefinitions, routeIds, type DemoRouteId } from "@/lib/integration/routes";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
 import {
@@ -167,7 +167,7 @@ function DrivingSession({ routeId, onRouteChange }: { routeId: DemoRouteId; onRo
             </span>
             <strong>
               <select aria-label="Destination" className="destination-select" value={routeId} onChange={event => onRouteChange(event.target.value as DemoRouteId)}>
-                {routeIds.map(id => <option key={id} value={id}>{demoRoutes[id].destination}</option>)}
+                {routeIds.map(id => <option key={id} value={id}>{destinationDefinitions[id].destination}</option>)}
               </select> <Flag size={12} />
             </strong>
           </div>

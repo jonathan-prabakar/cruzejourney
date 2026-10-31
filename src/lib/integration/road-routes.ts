@@ -6,12 +6,12 @@ import original from "../../data/demo-telemetry.json";
 import { DEMO_ROUTE_LENGTH_MILES } from "../fuel";
 import { validateFuelStations } from "../fuel/stations";
 import type { TelemetryDataset } from "../telemetry/types";
-import { demoRoutes, routeIds, type DemoRouteId } from "./routes";
+import { destinationDefinitions, routeIds, type DemoRouteId } from "./routes";
 import { geometryDistances, pointAtProgress } from "./road-geometry";
 const snapshots = { austin, dallas, houston, "el-paso": elPaso };
 export function createRoadRoute(id: DemoRouteId) {
   const road = snapshots[id];
-  const definition = demoRoutes[id];
+  const definition = destinationDefinitions[id];
   const miles = road.distanceMeters / 1609.344;
   const scale = miles / DEMO_ROUTE_LENGTH_MILES;
   const start = Date.parse(original.records[0].timestamp);

@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useVehicleTelemetry } from "./useVehicleTelemetry";
 import { TelemetryPlayback } from "../lib/telemetry/playback";
 import { roadRoutes } from "../lib/integration/road-routes";
-import { demoRoutes, type DemoRouteId } from "../lib/integration/routes";
+import { type DemoRouteId } from "../lib/integration/routes";
 import {
   getDemoSnapshot,
   selectFeasibleRecommendation,
@@ -17,9 +17,9 @@ import type { VehicleIntelligenceResult } from "../lib/intelligence/types";
 
 export function useIntegratedVehicle(
   routeId: DemoRouteId = "austin",
-  roadMode = false,
+  roadMode = true,
 ) {
-  const dataset = (roadMode ? roadRoutes : demoRoutes)[routeId].dataset;
+  const dataset = roadRoutes[routeId].dataset;
   const recordIndices = new Map(
     dataset.records.map((r, i) => [r.timestamp, i]),
   );

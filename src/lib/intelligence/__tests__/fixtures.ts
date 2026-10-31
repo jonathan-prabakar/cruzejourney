@@ -1,4 +1,4 @@
-import { createIntelligenceScenarios } from '../scenarios';
+import { createIntelligenceScenarios } from './scenarios';
 import { prepareIntelligenceContext } from '../context';
 import { buildFallback } from '../fallback';
 import type { IntelligenceModel, ModelDecision, ProposedInsight, VehicleIntelligenceContext, VehicleIntelligenceResult } from '../types';

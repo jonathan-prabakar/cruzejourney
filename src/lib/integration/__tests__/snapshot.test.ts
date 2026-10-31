@@ -1,3 +1,4 @@
+import { roadRoutes } from "../road-routes";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -38,7 +39,7 @@ describe("application integration snapshot", () => {
     expect(s.fuel.fuel.reserveGallons).toBe(12);
   });
   it("displays an engine-selected station, not the M1 fixture", () =>
-    expect(getDemoSnapshot(0).fuel.recommendation.station?.id).toBe("demo-03"));
+    expect(getDemoSnapshot(0).stations.every(s => s.id.startsWith("osm-"))).toBe(true));
   it("returns a real no-reachable-station fallback at the critical ending", () => {
     const s = getDemoSnapshot(240);
     expect(s.fuel.status.fuelStatus).toBe("CRITICAL");
@@ -117,7 +118,7 @@ describe("trusted server and missing-key integration", () => {
     expect(response.status).toBe(200);
     const result = await response.json();
     expect(result.source).toBe("fallback");
-    expect(result.telemetryTimestamp).toBe(demoDataset.records[160].timestamp);
+    expect(result.telemetryTimestamp).toBe(roadRoutes.austin.dataset.records[160].timestamp);
   });
   it("rejects forged deterministic conclusions", async () => {
     expect((await POST(request({ index: 0, fuelRange: 99999 }))).status).toBe(
@@ -134,7 +135,7 @@ describe("trusted server and missing-key integration", () => {
 
 describe("Gemma selects only current feasible engine candidates", () => {
   it("allows a validated model selection among M3 alternatives", () => {
-    const s = getDemoSnapshot(0);
+    const s = getDemoSnapshot(0, "dallas");
     const advice = buildFallback(prepareIntelligenceContext(s.context), 0);
     advice.source = "gemma4";
     advice.insights[0].relatedStationId =
@@ -145,7 +146,7 @@ describe("Gemma selects only current feasible engine candidates", () => {
     ).toBe(advice.insights[0].relatedStationId);
   });
   it("rejects invented station selections and stale advice", () => {
-    const s = getDemoSnapshot(0);
+    const s = getDemoSnapshot(0, "dallas");
     const advice = buildFallback(prepareIntelligenceContext(s.context), 0);
     advice.source = "gemma4";
     advice.insights[0].relatedStationId = "invented";

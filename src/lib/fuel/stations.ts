@@ -1,4 +1,3 @@
-import demo from '../../data/demo-fuel-stations.json';
 import { isNonnegativeFinite } from './range';
 import type { FuelStation, StationValidationIssue, StationValidationResult } from './types';
 
@@ -52,10 +51,3 @@ export function parseFuelStationsJson(text: string): StationValidationResult {
   try { return validateFuelStations(JSON.parse(text) as unknown); }
   catch { return { valid: false, stations: [], errors: [{ index: null, field: 'json', message: 'Invalid JSON syntax' }] }; }
 }
-/** Fresh copies protect the bundled fictional source from consumer mutation. */
-export function getDemoFuelStations(): FuelStation[] {
-  const result = validateFuelStations(demo.stations);
-  if (!result.valid) throw new Error('Bundled fictional station data failed validation');
-  return result.stations;
-}
-export const demoStationMetadata = Object.freeze({ ...demo.metadata });

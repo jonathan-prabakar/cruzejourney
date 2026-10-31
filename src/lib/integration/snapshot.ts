@@ -1,24 +1,24 @@
 import { roadRoutes } from "./road-routes";
 import demo from "../../data/demo-telemetry.json";
-import { demoRoutes, type DemoRouteId } from "./routes";
+import { type DemoRouteId } from "./routes";
 import {
   calculateFuelIntelligence,
-  getDemoFuelStations,
-  getDemoRouteContext,
 } from "../fuel";
 import { assessVehicleHealth } from "../diagnostics";
 import type { VehicleTelemetry } from "../telemetry/types";
 import type { VehicleIntelligenceContext } from "../intelligence/types";
 
 export const demoDataset = demo;
-export const demoStations = getDemoFuelStations();
+
 export const fuelConfig = { reservePercent: 10, uncertaintyMargin: 0 };
 export function getDemoSnapshot(
   index: number,
   routeId: DemoRouteId = "austin",
-  roadMode = false,
+  _roadMode = true,
 ) {
-  const definition = roadMode ? roadRoutes[routeId] : demoRoutes[routeId];
+  // Retain the former mode argument for callers; fictional map mode was removed.
+  void _roadMode;
+  const definition = roadRoutes[routeId];
   const demo = definition.dataset;
   const demoStations = definition.stations;
   const totalMiles = definition.miles;
@@ -26,16 +26,11 @@ export function getDemoSnapshot(
     throw new RangeError("Invalid telemetry index");
   const currentTelemetry: VehicleTelemetry = demo.records[index];
   const history: VehicleTelemetry[] = demo.records.slice(0, index + 1);
-  const route =
-    !roadMode && routeId === "austin"
-      ? getDemoRouteContext(index)
-      : {
-          currentDistanceAlongRouteMiles: definition.progress[index],
-          remainingRouteMiles: totalMiles - definition.progress[index],
-          distanceSource: roadMode
-            ? ("verified" as const)
-            : ("simulated" as const),
-        };
+  const route = {
+    currentDistanceAlongRouteMiles: definition.progress[index],
+    remainingRouteMiles: Math.max(0, totalMiles - definition.progress[index]),
+    distanceSource: "verified" as const,
+  };
   const vehicle = demo.metadata.vehicle;
   const fuel = calculateFuelIntelligence({
     telemetry: currentTelemetry,

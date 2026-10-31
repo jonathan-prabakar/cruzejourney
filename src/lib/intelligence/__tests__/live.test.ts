@@ -1,7 +1,7 @@
 import process from 'node:process';
 import { expect, it } from 'vitest';
 import { analyzeVehicleIntelligence } from '../orchestrator.server';
-import { createIntelligenceScenarios } from '../scenarios';
+import { createIntelligenceScenarios } from './scenarios';
 
 const enabled = process.env.RUN_GEMMA_LIVE === '1';
 if (enabled) {

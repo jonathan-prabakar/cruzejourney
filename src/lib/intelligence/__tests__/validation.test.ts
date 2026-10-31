@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { prepareIntelligenceContext } from '../context';
 import { validateModelDecision } from '../validation';
-import { createIntelligenceScenarios } from '../scenarios';
+import { createIntelligenceScenarios } from './scenarios';
 import { combinedDecision, context, fuelDecision } from './fixtures';
 
 describe('untrusted model decision validation', () => {

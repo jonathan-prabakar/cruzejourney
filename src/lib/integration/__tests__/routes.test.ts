@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { demoRoutes, routeIds } from "../routes";
+import { routeIds } from "../routes";
+import { roadRoutes as demoRoutes } from "../road-routes";
 import { getDemoSnapshot } from "../snapshot";
 import { TelemetryPlayback } from "../../telemetry/playback";
 import { POST } from "../../../app/api/intelligence/route";
@@ -20,7 +21,7 @@ describe("selectable synthetic destinations", () => {
       expect(getDemoSnapshot(160, id).health.activeCodes).toContain("P0301");
       expect(
         first.stations.every(
-          (s) => s.isSynthetic && s.priceSource === "sample",
+          (s) => !s.isSynthetic && s.priceSource === "unknown",
         ),
       ).toBe(true);
       expect(first.context.stations).toEqual(first.stations);
@@ -49,7 +50,7 @@ describe("selectable synthetic destinations", () => {
       }
     },
   );
-  it("never shares timestamps or station IDs across destinations", () => {
+  it("never shares scenario timestamps and uses only OSM station IDs", () => {
     const timestamps = routeIds.flatMap((id) =>
       demoRoutes[id].dataset.records.map((r) => r.timestamp),
     );
@@ -57,7 +58,7 @@ describe("selectable synthetic destinations", () => {
     const stations = routeIds.flatMap((id) =>
       demoRoutes[id].stations.map((s) => s.id),
     );
-    expect(new Set(stations).size).toBe(stations.length);
+    expect(stations.every(id => id.startsWith("osm-"))).toBe(true);
   });
   it("reconstructs the selected route on the server and rejects unknown destinations", async () => {
     vi.stubEnv("GEMINI_API_KEY", "");

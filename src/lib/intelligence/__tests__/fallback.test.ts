@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { prepareIntelligenceContext } from '../context';
 import { buildFallback } from '../fallback';
-import { createIntelligenceScenarios } from '../scenarios';
+import { createIntelligenceScenarios } from './scenarios';
 import { context, now } from './fixtures';
 
 describe('deterministic fallback and bounded context', () => {
