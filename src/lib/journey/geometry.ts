@@ -42,5 +42,5 @@ export function itineraryGeometry(route: JourneyRoute, legs: readonly Pick<Journ
     coordinates.push(route.coordinates[cursor]); cumulativeMiles.push(route.cumulativeMiles[cursor] + extras); cursor++;
   }
   return { ...route, coordinates, cumulativeMiles, distanceMiles: route.distanceMiles + extras,
-    provenance: extras > 0 ? 'cached-road-with-modeled-access' : 'cached-road' };
+    provenance: extras > 0 ? 'cached-road-with-modeled-access' : route.provenance };
 }

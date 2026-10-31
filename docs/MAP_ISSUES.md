@@ -1,5 +1,7 @@
 # Map integration: ranked findings
 
+> Current status is in [FINAL_INTEGRATION_REPORT.md](../FINAL_INTEGRATION_REPORT.md). Default Turbopack now builds successfully; the unified driver view uses real road routing and 13 sourced truck stops. The browser permission and truck-profile limitations remain. Earlier ranked findings below document the previous map pass.
+
 Reviewed October 31, 2026. Priorities separate fixed behavior from product and verification gaps.
 
 ## Fixed in this branch

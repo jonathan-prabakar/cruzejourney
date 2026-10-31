@@ -1,47 +1,31 @@
-# Cruze FuelSense
+# Cruze Journey
 
-<!-- impeccable:product-schema 1 -->
+## Platform and stack
 
-## Platform
+Web application using Next.js App Router, React, TypeScript, Tailwind, Lucide, Recharts and MapLibre/OpenFreeMap. Supplied Cruze - Journey assets live under `public/brand`.
 
-web
+## Purpose and users
 
-## Stack
+A hackathon truck-journey simulation for evaluators and drivers exploring fuel planning, route-aware telemetry, diagnostics and optional Gemma advice. No physical vehicle is connected.
 
-User specified Next.js App Router, React, TypeScript, Tailwind CSS, Lucide and Recharts.
+## Current experience
 
-## Product Purpose
+One fixed map-first driving view at `/`: select Point A and Point B, then Start Drive. `/journey` redirects to the same view. The former dashboard/sidebar/planner pages are historical; their domain capabilities are integrated into this workflow. Sensor values are read-only. Demo Playback alone changes synthetic playback position, speed, reset and 10/15/20-second duration.
 
-A hackathon vehicle-intelligence extension for Cruze Maps: fuel monitoring, station recommendations, diagnostics, and efficiency insights.
+The layout-owned ConnectedVehicleSession owns one active M2 TelemetryPlayback through JourneySimulation. Current fuel, GPS, route progress, diagnostic history and purchases come from that shared timeline. M3 handles reserve/reachability and route-needed refills; M4 interprets observed diagnostics. Gemma uses the existing structured server orchestrator and deterministic fallback; it does not control the vehicle or silently accept a route.
 
-## Users
+## Locations and data
 
-Hackathon evaluators and drivers exploring a simulated freight-truck journey. Driver audience is inferred from the brief; no production driving use is claimed.
+Five I-35 corridor cities support 20 directed cached road pairs. San Antonio also supports Dallas, Houston and El Paso, giving 23 supported directed connections. Other combinations are explicitly unavailable.
 
-## Capabilities and Constraints
+The active catalog contains 13 real truck stops: 12 Love's locations and TA New Braunfels #0232. Official operator pages provide coordinates, truck facilities and price snapshots checked 2026-10-31. Current prices, stock/open status, traffic and truck-clearance routing are unavailable. Unsourced amenities remain empty. Synthetic station and amenity fixtures are confined to tests.
 
-The integrated application uses M2 synthetic telemetry playback, deterministic M3 fuel recommendations and educational diagnostics, plus optional server-side Gemma decision support. No live vehicle, real OBD-II, authentication or database. Four San Antonio road journeys use selected real Love's truck stops with official Auto Diesel price snapshots checked 2026-10-31. Vehicle readings, traffic, station availability and truck-specific navigation remain simulated or unavailable. M5A is available at `/journey` with a bounded I-35 corridor planner, modeled refills and deterministic intelligence; it uses the same verified station source and leaves unsourced amenity coverage empty.
+MapLibre renders real roads and available 3D buildings. Required fuel stops are validated against OSRM road geometry before driving. A station can be inspected, previewed and accepted as a road reroute. Refueling is an explicit simulated engine-off event at the stop, followed by travel to the destination. Public OSRM uses a general driving profile.
 
-## Brand Commitments
+## Scope and limits
 
-Cruze FuelSense. Drive Smarter. Further. Premium dark automotive dashboard. Flowing-road F logo, authored SVG when no supplied asset exists. Exact palette in the user brief.
+No physical OBD/ELD, authenticated vehicle ownership, live business feed, arbitrary-address geocoder or M5B efficiency engine is implemented. Instant MPG is visible; unavailable analytics do not produce invented scores or savings. Keys stay in server environment variables. The user will configure GEMINI_API_KEY in Vercel; live inference is not verified on this Mac.
 
-## Evidence on Hand
+## Current verification
 
-User-provided milestone brief. Repository initially contained only README.md; no logo or reference image.
-
-## Accessibility & Inclusion
-
-Keyboard controls, visible focus, responsive layouts, reduced motion, readable contrast.
-
-## Added reference material
-
-`docs/Cruze_FuelSense_Hackathon_Plan.md` is supplied planning documentation, not authorization to implement future features in the UI-only asset task. Supplied logo, icon, token and brand-board assets now inform presentation; their origin is recorded in `docs/BRAND_ASSETS.md`. Existing functional scope is unchanged.
-
-## Current interface commitment
-
-The user explicitly requested a fixed, lightly gamified driving interface with no sidebar or tabs. Preserve existing functionality and brand assets while presenting the primary experience as one cockpit. Long explanations remain accessible through detail inspections. The attached M4 diagnostic-engine prompt is separate context; this UI task does not implement or merge that engine.
-
-## Real-road simulation
-
-The real-map branch adds four San Antonio departures: Austin, Dallas, Houston and El Paso. MapLibre/OpenFreeMap render real roads and available 3D buildings. Cached OSRM road routes and a curated list of 12 official Love's truck stops support the simulation. Stops list truck parking, DEF lanes and diesel; per-gallon prices are dated operator-page snapshots rather than live data. Vehicle readings, fuel consumption, diagnostics and driving progress remain simulated. This is not live traffic, live station availability or truck-specific routing.
+See [FINAL_INTEGRATION_REPORT.md](FINAL_INTEGRATION_REPORT.md) for branch ancestry, checks, source links and deployment constraints. Browser visual verification is blocked by a saved localhost permission; do not describe the merged layout as visually verified.

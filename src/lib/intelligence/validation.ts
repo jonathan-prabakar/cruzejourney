@@ -13,7 +13,7 @@ export function validateModelDecision(text: string, context: PreparedContext): D
   if (typeof text !== 'string' || text.length > 16000) return fail('Output exceeds decision limits');
   let value: unknown;
   try { value = JSON.parse(text.trim()); } catch { return fail('Expected a JSON decision object'); }
-  if (!object(value) || !keys(value, ['topPriority', 'insights']) || typeof value.topPriority !== 'string' ||
+  if (!object(value) || !keys(value, context.journey ? ['topPriority', 'insights', 'journeyChoice'] : ['topPriority', 'insights']) || typeof value.topPriority !== 'string' ||
       !Array.isArray(value.insights) || value.insights.length < 1 || value.insights.length > 4) return fail('Invalid decision envelope');
   const ids = new Set<string>(), proposals: ProposedInsight[] = [];
   const factMap = new Map(context.facts.map(f => [f.id, f]));
@@ -35,8 +35,11 @@ export function validateModelDecision(text: string, context: PreparedContext): D
     if (p.diagnosticCodes.some(code => !context.observedCodes.includes(code) || !p.evidenceIds.includes('diagnostic.' + code))) return fail('Unobserved diagnostic code');
     // Diagnostic facts cannot be cited while omitting the code links.
     if (p.evidenceIds.some(id => id.startsWith('diagnostic.') && !p.diagnosticCodes.includes(id.slice(11)))) return fail('Missing diagnostic reference');
-    if (p.stationId !== null && (!context.eligibleStations.some(s => s.station.id === p.stationId) ||
-        !p.evidenceIds.includes('station.' + p.stationId) || !p.actions.includes('refuel'))) return fail('Unapproved station selection');
+    if (p.stationId !== null) {
+      if (!context.eligibleStations.some(s => s.station.id === p.stationId)) return fail('Station is not an eligible reviewed choice');
+      if (!p.evidenceIds.includes('station.' + p.stationId)) return fail('Selected station must include its exact station.ID evidence reference');
+      if (!p.actions.includes('refuel')) return fail('A station choice requires a refuel action; otherwise stationId must be null');
+    }
     if (p.actions.includes('refuel') && (!p.stationId || context.coolantStatus === 'critical' ||
         context.diagnosticFindings.some(f => context.activeCodes.includes(f.code) && f.severity === 'critical'))) return fail('Unsafe refueling action');
     const domains = new Set(p.evidenceIds.map(id => factMap.get(id)!.domain));
@@ -76,5 +79,24 @@ export function validateModelDecision(text: string, context: PreparedContext): D
     proposals.push(p);
   }
   if (!ids.has(value.topPriority)) return fail('Top priority does not identify an insight');
-  return { valid: true, decision: { topPriority: value.topPriority, insights: proposals }, errors: [] };
+  let journeyChoice: ModelDecision['journeyChoice'];
+  if (context.journey) {
+    const choice = value.journeyChoice;
+    if (!object(choice) || !keys(choice, ['selectedPlanId', 'stationId', 'amenityId']) ||
+        typeof choice.selectedPlanId !== 'string' ||
+        !(choice.stationId === null || typeof choice.stationId === 'string') ||
+        !(choice.amenityId === null || typeof choice.amenityId === 'string')) return fail('Invalid journey choice');
+    const journey = context.journey;
+    const plan = [journey.current, ...journey.alternatives].find(p => p.id === choice.selectedPlanId && p.feasible);
+    const top = proposals.find(p => p.id === value.topPriority)!;
+    if (!plan || (journey.progressMiles > 0 && plan.id !== journey.current.id && !plan.proposal) ||
+        choice.stationId !== top.stationId ||
+        (choice.stationId !== null && (!plan.stationIds.includes(choice.stationId) ||
+          !context.eligibleStations.some(s => s.station.id === choice.stationId))) ||
+        (choice.amenityId !== null && !journey.fictionalAmenities.some(a => a.id === choice.amenityId &&
+          a.stationId === choice.stationId && journey.preferences.amenities.includes(a.category))))
+      return fail('Unapproved journey choice');
+    journeyChoice = choice as unknown as ModelDecision['journeyChoice'];
+  }
+  return { valid: true, decision: { topPriority: value.topPriority, insights: proposals, ...(journeyChoice ? { journeyChoice } : {}) }, errors: [] };
 }

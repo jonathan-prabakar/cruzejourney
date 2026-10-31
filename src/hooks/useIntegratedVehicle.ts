@@ -180,6 +180,11 @@ export function useIntegratedVehicle(
     setRunDuration: playback.setRunDuration,
     intelligence: {
       result,
+      error: intelligenceState.result?.error ?? null,
+      statusLabel: intelligenceState.status === 'analyzing' || intelligenceState.status === 'pending'
+        ? 'Analyzing' : result.source === 'gemma4' ? 'Gemma 4 active'
+        : intelligenceState.result?.error?.code === 'UNKNOWN_MODEL' ? 'Model unavailable'
+        : intelligenceState.result?.error ? 'Error · retry' : 'Deterministic fallback',
       state: intelligenceState.status,
       available: availability?.available ?? false,
       checking: availability === null,

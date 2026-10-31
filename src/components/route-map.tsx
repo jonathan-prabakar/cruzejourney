@@ -12,6 +12,7 @@ import { roadRoutes } from "@/lib/integration/road-routes";
 import type { DemoRouteId } from "@/lib/integration/routes";
 import type { FuelStation } from "@/lib/fuel/types";
 import type { VehicleTelemetry } from "@/lib/telemetry/types";
+export type MapTrip = Pick<RoadRoute, "destination"> & { road: Pick<RoadRoute["road"], "geometry"> };
 
 export default function RouteMap({
   routeId = "austin",
@@ -24,10 +25,12 @@ export default function RouteMap({
   playing = false,
   fastRun = false,
   onStations,
+  proposalCoordinates,
 }: {
   routeId?: DemoRouteId;
-  trip?: RoadRoute;
-  getMotionProgress?: () => number;
+  trip?: MapTrip;
+  getMotionProgress?: () => number | undefined;
+  proposalCoordinates?: readonly number[][];
   playing?: boolean;
   fastRun?: boolean;
   onStations?: (trigger: HTMLElement) => void;
@@ -141,6 +144,9 @@ export default function RouteMap({
             type: "geojson",
             data: { type: "FeatureCollection", features: [] },
           });
+          instance.addSource("proposed-road", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+          instance.addLayer({ id: "proposed-road-line", type: "line", source: "proposed-road",
+            paint: { "line-color": "#e9c57c", "line-width": 6, "line-dasharray": [2, 2] } });
           const source = instance.getStyle().sources;
           const vectorSource = Object.keys(source).find(
             (key) => source[key].type === "vector",
@@ -406,10 +412,15 @@ export default function RouteMap({
       );
     });
   }, [recommendedId, ready, stations]);
+  useEffect(() => {
+    if (!ready) return;
+    (map.current?.getSource("proposed-road") as GeoJSONSource | undefined)?.setData({ type: "FeatureCollection",
+      features: proposalCoordinates ? [{ type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: proposalCoordinates as number[][] } }] : [] });
+  }, [proposalCoordinates, ready]);
   return (
     <section
       className="route-map real-route-map"
-      aria-label={`Road map with verified truck stops from San Antonio to ${route.destination}`}
+      aria-label={`Road map with verified truck stops to ${route.destination}`}
     >
       <div ref={container} className="real-map-container" />
       {status && (

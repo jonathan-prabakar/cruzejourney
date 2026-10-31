@@ -31,5 +31,6 @@ it("keeps server modules, credentials and the Google SDK out of the cockpit impo
     }
   }
   visit(resolve("src/components/dashboard.tsx"));
+  visit(resolve("src/components/driving-dashboard.tsx"));
   expect(visited.size).toBeGreaterThan(10);
 });

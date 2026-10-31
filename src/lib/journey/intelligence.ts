@@ -1,3 +1,6 @@
+import { IntelligenceError, sanitizeError } from '../intelligence/errors';
+import type { SanitizedIntelligenceError } from '../intelligence/types';
+import { fuelOptions } from '../vehicle/fuel-options';
 import { calculateFuelIntelligence } from '../fuel/intelligence';
 import { evaluateItinerary, JOURNEY_VEHICLE, PLANNING_MPG } from './planner';
 import { rawDiagnosticAdapter } from './simulation';
@@ -5,13 +8,16 @@ import type { JourneyIntelligenceAdapter, JourneyIntelligenceContext, JourneyIns
 
 export function makeJourneyIntelligenceContext(planning: JourneyPlanningResult, frame: SimulationFrame, diagnosticsAdapter: DiagnosticsAdapter = rawDiagnosticAdapter): JourneyIntelligenceContext {
   const plan = planning.requested;
+  const liveMpg = frame.phase === 'driving' && frame.telemetry.mpg > 0 ? Math.min(PLANNING_MPG, frame.telemetry.mpg) : plan.planningMpg ?? PLANNING_MPG;
   const fuel = calculateFuelIntelligence({
     telemetry: frame.telemetry, vehicle: JOURNEY_VEHICLE,
     route: { currentDistanceAlongRouteMiles: frame.baseRouteMiles, remainingRouteMiles: frame.remainingDistanceMiles, distanceSource: 'simulated' },
     stations: planning.stations.map(s => ({ ...s, detourMiles: frame.stopId === s.id && frame.phase === 'fuel-stop' ? 0 : s.detourMiles })),
-    requiredFuelType: 'diesel', config: { planningMpg: PLANNING_MPG, reservePercent: 10 },
+    requiredFuelType: 'diesel', config: { planningMpg: liveMpg, reservePercent: 10 },
   });
+  const compared = fuelOptions(planning, frame);
   return { plan, alternatives: [planning.recommended, ...planning.alternatives].filter((p): p is NonNullable<typeof p> => p !== null && p.id !== plan.id),
+    proposals: compared.needed ? compared.options.slice(0, 4).map(o => o.plan) : [],
     frame, fuel, diagnostics: diagnosticsAdapter.evaluate(frame.telemetry), amenities: planning.amenities };
 }
 export function deterministicJourneyInsight(context: JourneyIntelligenceContext): JourneyInsight {
@@ -26,7 +32,7 @@ export function deterministicJourneyInsight(context: JourneyIntelligenceContext)
       : station ? 'The reviewed plan includes ' + station.station.name + ' at ' + station.leg.cumulativeTravelMiles.toFixed(1) + ' modeled miles, with an explicit refill. ' +
         (meal ? 'A selected fictional restaurant break can be combined with the itinerary. ' : '') + 'Planning uses 7.5 MPG and a 10% tank reserve.'
       : 'The itinerary is feasible under the planning assumptions. Arrival fuel is estimated, not guaranteed.',
-    action: !plan.feasible ? 'Use the recommended feasible alternative or increase starting fuel.'
+    action: !plan.feasible ? 'Arrange refueling or assistance; do not continue beyond modeled usable range.'
       : diagnostics.length ? 'Arrange qualified evaluation; use the fuel plan only if continuing is appropriate. Stop safely and seek assistance if vehicle warnings or symptoms require it.'
       : station ? 'Inspect the planned stop and available amenities. Do not travel beyond modeled usable range.'
       : 'Monitor vehicle measurements and follow the route preview.',
@@ -38,9 +44,9 @@ export function validateJourneyDecision(value: JourneyDecision, context: Journey
   if (!value || Object.keys(value).sort().join(',') !== ['source','model','priority','strategy','selectedPlanId','stationId','amenityId','diagnosticCodes'].sort().join(',') ||
       !['critical','high','medium','low'].includes(value.priority)) return false;
   if (value.source !== 'gemma4' || !['gemma-4-26b-a4b-it', 'gemma-4-31b-it'].includes(value.model)) return false;
-  const eligiblePlans = [context.plan, ...context.alternatives].filter(p => p.feasible);
+  const eligiblePlans = [context.plan, ...context.alternatives, ...(context.proposals ?? [])].filter(p => p.feasible);
   const selected = eligiblePlans.find(p => p.id === value.selectedPlanId);
-  if (!selected || (context.frame.distanceMiles > 0 && selected.id !== context.plan.id)) return false;
+  if (!selected || (context.frame.distanceMiles > 0 && selected.id !== context.plan.id && !context.proposals?.some(p => p.id === selected.id))) return false;
   if (!['refuel', 'evaluate-first', 'combine-break', 'monitor', 'seek-assistance'].includes(value.strategy)) return false;
   if (value.stationId !== null && (!selected.fuelStops.some(s => s.station.id === value.stationId) ||
       !context.fuel.recommendation.assessments.some(a => a.station.id === value.stationId && a.status === 'REACHABLE'))) return false;
@@ -83,9 +89,9 @@ export function createJourneyGemmaAdapter(delegate: (context: JourneyIntelligenc
       if (signal.aborted || !validateJourneyDecision(decision, context)) throw new Error('Journey decision rejected.');
       const station = context.fuel.recommendation.assessments.find(a => a.station.id === decision.stationId);
       const amenity = context.amenities.find(a => a.id === decision.amenityId);
-      const plan = [context.plan, ...context.alternatives].find(p => p.id === decision.selectedPlanId)!;
+      const plan = [context.plan, ...context.alternatives, ...(context.proposals ?? [])].find(p => p.id === decision.selectedPlanId)!;
       return {
-        source: 'gemma4', priority: decision.priority,
+        source: 'gemma4', strategy: decision.strategy, priority: decision.priority,
         title: decision.strategy === 'combine-break' ? 'Combine a feasible refill and break' : decision.strategy === 'evaluate-first' ? 'Evaluate the diagnostic concern first' : 'Gemma journey strategy',
         explanation: 'Gemma selected ' + decision.strategy + ' for ' + plan.route.origin.name + ' → ' + plan.route.destination.name + '. ' +
           (station ? station.explanation + ' ' : '') +
@@ -101,6 +107,11 @@ export function createJourneyGemmaAdapter(delegate: (context: JourneyIntelligenc
 }
 /** Event-aware adapter coordinator; fallback never makes a network request. */
 export class JourneyIntelligenceCoordinator {
+  private state: { status: 'idle' | 'pending' | 'analyzing' | 'ready' | 'fallback' | 'error'; error: SanitizedIntelligenceError | null } = { status: 'idle', error: null };
+  getState = () => this.state;
+  private setState(status: typeof this.state.status, error: SanitizedIntelligenceError | null = null) {
+    this.state = { status, error }; this.listeners.forEach(l => l());
+  }
   private version = 0;
   private fingerprint = '';
   private active: AbortController | null = null;
@@ -120,8 +131,11 @@ export class JourneyIntelligenceCoordinator {
   update(context: JourneyIntelligenceContext, epoch: number, force = false): void {
     if (this.disposed) return;
     const fingerprint = JSON.stringify([context.plan.id, epoch, context.fuel.status.fuelStatus, context.fuel.status.routeSafety,
-      context.frame.phase === 'fuel-stop' || context.frame.phase === 'amenity-stop' ? context.frame.stopId : null,
-      context.diagnostics.map(d => d.code)]);
+      context.frame.phase, context.frame.stopId,
+      context.fuel.recommendation.recommended?.station.id, context.proposals?.[0]?.fuelStops[0]?.station.id,
+      context.fuel.recommendation.assessments.filter(a => a.status === 'REACHABLE').map(a => a.station.id),
+      context.diagnostics.map(d => [d.code, d.severity]), context.efficiency?.status,
+      Math.floor((context.fuel.fuel.planningMpg ?? PLANNING_MPG) * 2) / 2]);
     const key = JSON.stringify([context.plan.id, context.frame.telemetry, context.fuel.status, context.frame.stopId]);
     if (fingerprint === this.fingerprint && (!force || (this.active && !this.active.signal.aborted && this.activeKey === key))) return;
     this.fingerprint = fingerprint;
@@ -130,30 +144,31 @@ export class JourneyIntelligenceCoordinator {
     if (this.timer) clearTimeout(this.timer);
     if (this.timeout) clearTimeout(this.timeout);
     this.emit(deterministicJourneyInsight(context));
+    this.setState(this.adapter ? 'pending' : 'fallback');
     if (!this.adapter) return;
     const cached = this.cache.get(key);
-    if (cached && this.now() - cached.at < 30000) { this.emit(cached.insight); return; }
+    if (cached && this.now() - cached.at < 30000) { this.emit(cached.insight); this.setState('ready'); return; }
     const run = () => {
       if (version !== this.version || this.disposed) return;
-      const abort = new AbortController(); this.active = abort; this.activeKey = key; this.lastCall = this.now();
-      this.timeout = setTimeout(() => { if (version === this.version) { abort.abort(); this.active = null; this.activeKey = null; this.version++; this.emit(deterministicJourneyInsight(context)); } }, 18000);
+      const abort = new AbortController(); this.active = abort; this.activeKey = key; this.lastCall = this.now(); this.setState('analyzing');
+      this.timeout = setTimeout(() => { if (version === this.version) { abort.abort(); this.active = null; this.activeKey = null; this.version++; this.emit(deterministicJourneyInsight(context)); this.setState('error', sanitizeError(new IntelligenceError('TIMEOUT'))); } }, 45000);
       this.adapter!.analyze(context, abort.signal).then(insight => {
         if (version !== this.version || this.disposed || abort.signal.aborted) return;
         if (this.timeout) clearTimeout(this.timeout);
         this.active = null; this.activeKey = null;
-        this.cache.set(key, { at: this.now(), insight });
+        if (insight.source === 'gemma4') this.cache.set(key, { at: this.now(), insight });
         while (this.cache.size > 8) this.cache.delete(this.cache.keys().next().value!);
-        this.emit(insight);
-      }).catch(() => {
+        this.emit(insight); this.setState(insight.source === 'gemma4' ? 'ready' : 'fallback');
+      }).catch(error => {
         if (version !== this.version || this.disposed) return;
         if (this.timeout) clearTimeout(this.timeout);
         this.active = null; this.activeKey = null;
-        this.emit(deterministicJourneyInsight(context));
+        this.emit(deterministicJourneyInsight(context)); this.setState('error', sanitizeError(error));
       });
     };
     const delay = Math.max(0, this.lastCall + this.throttleMs - this.now());
     if (delay) this.timer = setTimeout(run, delay); else run();
   }
-  invalidate(): void { this.version++; this.fingerprint = ''; this.active?.abort(); if (this.timer) clearTimeout(this.timer); if (this.timeout) clearTimeout(this.timeout); }
+  invalidate(): void { this.version++; this.insight = null; this.cache.clear(); this.setState('idle'); this.fingerprint = ''; this.active?.abort(); if (this.timer) clearTimeout(this.timer); if (this.timeout) clearTimeout(this.timeout); }
   dispose(): void { this.invalidate(); this.disposed = true; this.cache.clear(); this.listeners.clear(); }
 }

@@ -1,5 +1,6 @@
+import { JOURNEY_VEHICLE } from './planner';
 import { TelemetryPlayback } from '../telemetry/playback';
-import type { PlaybackScheduler, TelemetryProvider } from '../telemetry/types';
+import type { PlaybackScheduler, TelemetryProvider, VehicleTelemetry, RunDuration } from '../telemetry/types';
 import { positionAt } from './geometry';
 import type { DiagnosticsAdapter, JourneyPlan, JourneySimulationPort, SimulationFrame, SimulationScenario, SimulationState } from './types';
 
@@ -10,6 +11,14 @@ export const rawDiagnosticAdapter: DiagnosticsAdapter = {
     description: 'Observed simulated diagnostic code. A code alone does not confirm a mechanical cause; arrange qualified evaluation.',
   }] : [],
 };
+export function initialJourneyFrame(plan: JourneyPlan): SimulationFrame {
+  return {
+    telemetry: { timestamp: '2026-10-31T14:00:00.000Z', latitude: plan.route.coordinates[0][1], longitude: plan.route.coordinates[0][0],
+      speed_mph: 0, rpm: 0, fuel_percent: plan.preferences.startingFuelPercent, mpg: 8, coolant_temp_f: 195, diagnostic_code: null },
+    distanceMiles: 0, baseRouteMiles: 0, remainingDistanceMiles: plan.totalDistanceMiles, phase: 'blocked',
+    stopId: null, fuelAddedGallons: 0, purchaseCost: 0, elapsedSeconds: 0,
+  };
+}
 const start = Date.parse('2026-10-31T14:00:00Z');
 export function diagnosticDistanceFor(plan: JourneyPlan, scenario: SimulationScenario): number {
   const midpoint = plan.totalDistanceMiles * 0.35;
@@ -17,29 +26,31 @@ export function diagnosticDistanceFor(plan: JourneyPlan, scenario: SimulationSce
     ? Math.min(midpoint, plan.fuelStops[0].leg.cumulativeTravelMiles * 0.65) : midpoint;
 }
 /** Route-specific measurements. Original M2 GPS is never reused on another journey. */
-export function generateSimulationFrames(plan: JourneyPlan, scenario: SimulationScenario): SimulationFrame[] {
+export function generateSimulationFrames(plan: JourneyPlan, scenario: SimulationScenario, seed?: VehicleTelemetry): SimulationFrame[] {
   if (!plan.feasible) throw new Error('Cannot simulate an itinerary that is not confirmed feasible.');
   if (!['normal', 'low-fuel', 'engine-warning', 'combined'].includes(scenario)) throw new Error('Unknown simulation scenario.');
+  const startTime = seed ? Date.parse(seed.timestamp) : start;
   const frames: SimulationFrame[] = [];
-  let distance = 0, base = 0, elapsed = 0, gallons = 120 * plan.preferences.startingFuelPercent / 100;
+  let distance = 0, base = 0, elapsed = 0, gallons = JOURNEY_VEHICLE.tank_capacity_gallons * plan.preferences.startingFuelPercent / 100;
   let purchased = 0, cost: number | null = 0;
   const hasDiagnostic = scenario === 'engine-warning' || scenario === 'combined';
   const push = (phase: SimulationFrame['phase'], speed: number, mpg: number, stopId: string | null = null) => {
     const coordinate = positionAt(plan.route, distance);
-    const code = hasDiagnostic && distance >= diagnosticDistanceFor(plan, scenario) ? 'P0301' : null;
+    const code = seed?.diagnostic_code ?? (hasDiagnostic && distance >= diagnosticDistanceFor(plan, scenario) ? 'P0301' : null);
     frames.push({
       telemetry: {
-        timestamp: new Date(start + Math.round(elapsed * 1000)).toISOString(),
+        timestamp: new Date(startTime + Math.round(elapsed * 1000)).toISOString(),
         longitude: coordinate[0], latitude: coordinate[1], speed_mph: speed,
         rpm: speed > 0 ? Math.round(800 + speed * 18 + 30 * Math.sin(frames.length / 6)) : 0,
-        fuel_percent: Math.max(0, Math.min(100, gallons / 120 * 100)),
+        fuel_percent: Math.max(0, Math.min(100, gallons / JOURNEY_VEHICLE.tank_capacity_gallons * 100)),
         mpg, coolant_temp_f: 195 + 2 * Math.sin(elapsed / 240), diagnostic_code: code,
       },
       distanceMiles: distance, baseRouteMiles: base, remainingDistanceMiles: Math.max(0, plan.totalDistanceMiles - distance),
       phase, stopId, fuelAddedGallons: purchased, purchaseCost: cost, elapsedSeconds: elapsed,
     });
   };
-  push('ready', 0, 8);
+  push('ready', 0, seed?.mpg ?? 8);
+  if (seed) frames[0].telemetry = { ...seed };
   const baseMiles = plan.totalDistanceMiles - plan.legs.reduce((sum, l) => sum + l.accessMiles, 0);
   const baseSeconds = plan.durationSeconds - plan.legs.reduce((sum, l) => sum + l.dwellSeconds + l.accessMiles / 20 * 3600, 0);
   for (const leg of plan.legs) {
@@ -55,7 +66,7 @@ export function generateSimulationFrames(plan: JourneyPlan, scenario: Simulation
       // Interval-average MPH: the same distance drives position, time and fuel accounting.
       gallons -= travel / mpg; elapsed += seconds; distance += travel;
       base = startBase + Math.min(roadMiles, Math.max(0, distance - startDistance));
-      if (gallons < 12 - 1e-7) { push('blocked', 0, mpg); return frames; }
+      if (gallons < JOURNEY_VEHICLE.tank_capacity_gallons * JOURNEY_VEHICLE.reservePercent / 100 - 1e-7) { push('blocked', 0, mpg); return frames; }
       if (i === steps - 1) { distance = leg.cumulativeTravelMiles; base = leg.baseRouteMiles; }
       push('driving', travel / seconds * 3600, mpg);
     }
@@ -65,10 +76,11 @@ export function generateSimulationFrames(plan: JourneyPlan, scenario: Simulation
     }
     if (leg.kind === 'fuel') {
       const station = plan.fuelStops.find(s => s.station.id === leg.waypointId)!.station;
-      const toAdd = 120 - gallons;
+      const target = leg.departureFuelGallons;
+      const toAdd = Math.max(0, target - gallons);
       const dwellSeconds = 120 + toAdd / 12 * 60, steps = Math.max(1, Math.ceil(dwellSeconds / 20));
       for (let i = 0; i < steps; i++) {
-        const amount = i === steps - 1 ? 120 - gallons : toAdd / steps;
+        const amount = i === steps - 1 ? Math.max(0, target - gallons) : toAdd / steps;
         gallons += amount; purchased += amount; elapsed += dwellSeconds / steps;
         cost = cost === null || station.pricePerGallon === null ? null : cost + amount * station.pricePerGallon;
         push('fuel-stop', 0, 0, leg.waypointId);
@@ -83,10 +95,10 @@ export function generateSimulationFrames(plan: JourneyPlan, scenario: Simulation
   push('arrived', 0, 0);
   return frames;
 }
-export function createDemoClock(): PlaybackScheduler {
+export function createDemoClock(rate: () => number = () => SIMULATION_TIME_FACTOR): PlaybackScheduler {
   return {
-    now: () => performance.now() * SIMULATION_TIME_FACTOR,
-    setTimeout: (callback, delay) => globalThis.setTimeout(callback, delay / SIMULATION_TIME_FACTOR),
+    now: () => performance.now() * rate(),
+    setTimeout: (callback, delay) => globalThis.setTimeout(callback, delay / rate()),
     clearTimeout: handle => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>),
   };
 }
@@ -96,15 +108,19 @@ export class JourneySimulation implements JourneySimulationPort {
   private snapshot: SimulationState;
   private listeners = new Set<() => void>();
   private unsubscribe: () => void;
+  private readonly provider: TelemetryProvider;
+  private runDuration: RunDuration | null = null;
   constructor(plan: JourneyPlan, scenario: SimulationScenario,
-    private readonly provider: TelemetryProvider = new TelemetryPlayback(createDemoClock())) {
-    this.frames = generateSimulationFrames(plan, scenario);
+    providerInput?: TelemetryProvider, seed?: VehicleTelemetry) {
+    const provider = providerInput ?? new TelemetryPlayback(createDemoClock(() => this.runDuration === null ? SIMULATION_TIME_FACTOR : 1));
+    this.provider = provider;
+    this.frames = generateSimulationFrames(plan, scenario, seed);
     const result = provider.loadDataset({
       metadata: {
-        name: 'Synthetic route-aware journey simulation', source: 'FuelSense journey simulation; cached OSRM base geometry',
+        name: 'Synthetic route-aware journey simulation', source: 'Cruze - Journey simulation; cached OSRM base geometry',
         synthetic: true, route: plan.route.origin.name + ' to ' + plan.route.destination.name,
-        limitations: ['Synthetic telemetry; fictional stations, access loops, prices and diagnostic events.', '60 simulated seconds per real second at playback 1×. Interval-average speed readings.'],
-        vehicle: { name: 'Demo Freight Truck', tank_capacity_gallons: 120, typical_mpg: 8 },
+        limitations: ['Synthetic telemetry and diagnostic events; dated station records; general driving routes.', '60 simulated seconds per real second at playback 1×, or an explicit timed run. Interval-average speed readings.'],
+        vehicle: { name: JOURNEY_VEHICLE.name, tank_capacity_gallons: JOURNEY_VEHICLE.tank_capacity_gallons, typical_mpg: JOURNEY_VEHICLE.typical_mpg },
       },
       records: this.frames.map(f => f.telemetry),
     });
@@ -121,6 +137,20 @@ export class JourneySimulation implements JourneySimulationPort {
   pause = () => this.provider.pause();
   reset = () => this.provider.reset();
   seekTo = (index: number) => this.provider.seekTo(index);
-  setPlaybackSpeed = (speed: 1 | 2 | 5) => this.provider.setPlaybackSpeed(speed);
+  setPlaybackSpeed = (speed: 1 | 2 | 5) => { if (this.runDuration !== null) this.setRunDuration(null); this.provider.setPlaybackSpeed(speed); };
+  setRunDuration = (seconds: RunDuration | null) => {
+    if (seconds === this.runDuration) return;
+    const playing = this.provider.getPlaybackState().status === 'playing';
+    this.provider.pause(); this.runDuration = seconds; this.provider.setRunDuration(seconds);
+    if (playing) this.provider.play();
+  };
+  getMotionDistance = () => {
+    const seconds = this.provider.getElapsedMs() / 1000;
+    let low = 0, high = this.frames.length - 1;
+    while (low < high) { const mid = Math.ceil((low + high) / 2); if (this.frames[mid].elapsedSeconds <= seconds) low = mid; else high = mid - 1; }
+    const before = this.frames[low], after = this.frames[Math.min(low + 1, this.frames.length - 1)];
+    const fraction = after.elapsedSeconds === before.elapsedSeconds ? 0 : Math.max(0, Math.min(1, (seconds - before.elapsedSeconds) / (after.elapsedSeconds - before.elapsedSeconds)));
+    return before.distanceMiles + (after.distanceMiles - before.distanceMiles) * fraction;
+  };
   dispose = () => { this.unsubscribe(); this.provider.dispose(); this.listeners.clear(); };
 }

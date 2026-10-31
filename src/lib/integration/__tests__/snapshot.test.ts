@@ -3,6 +3,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Dashboard from "../../../components/dashboard";
+import { ConnectedVehicleProvider } from "../../../components/connected-vehicle-provider";
 import {
   demoDataset,
   getDemoSnapshot,
@@ -21,13 +22,12 @@ const request = (body: unknown, origin = "http://localhost") =>
   });
 describe("application integration snapshot", () => {
   it("server-renders the cockpit with the real initial M2 reading", () => {
-    const html = renderToStaticMarkup(React.createElement(Dashboard));
-    expect(html).toContain("Driving cockpit");
+    const html = renderToStaticMarkup(React.createElement(ConnectedVehicleProvider, null, React.createElement(Dashboard)));
+    expect(html).toContain("Start Drive");
     expect(html).toContain("28");
-    expect(html).toContain("163.2");
-    expect(html).toContain("VERIFIED TRUCK STOPS");
-    expect(html).not.toContain("FICTIONAL STATIONS");
-    expect(html).toContain("Destination");
+    expect(html).toContain('data-testid="vehicle-fuel">17.0');
+    expect(html).toContain("RECOMMENDED FUEL STOP");
+    expect(html).not.toContain("Journey planner");
     expect(html).not.toContain("Bluebonnet Travel Stop");
   });
   it("calculates the initial fuel and reserve from current telemetry", () => {
@@ -41,7 +41,7 @@ describe("application integration snapshot", () => {
   it("uses only sourced, truck-compatible fuel stops in the cockpit", () => {
     expect(
       getDemoSnapshot(0).stations.every(
-        (s) => s.id.startsWith("loves-") && s.truckAccess === "yes" &&
+        (s) => (s.id.startsWith("loves-") || s.id.startsWith("ta-")) && s.truckAccess === "yes" &&
           s.priceSource === "verified" && s.sourceUrl,
       ),
     ).toBe(true);

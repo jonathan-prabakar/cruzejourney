@@ -1,4 +1,5 @@
 "use client";
+import './location-field.css';
 import { useId, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { curatedRouteProvider } from '@/lib/journey/routes';
@@ -12,7 +13,7 @@ export default function LocationField({ label, value, onChange }: {
     <label htmlFor={id}>{label}</label>
     <div className="jp-input-wrap"><MapPin size={15}/><input id={id} role="combobox" autoComplete="off"
       aria-expanded={open} aria-controls={id + '-options'} aria-autocomplete="list"
-      value={value.text} placeholder="Search demo cities" onFocus={() => setOpen(true)}
+      value={value.text} placeholder="Search cities" onFocus={() => setOpen(true)}
       onChange={e => { onChange({ id: '', text: e.target.value }); setOpen(true); }}
       onKeyDown={e => {
         if (e.key === 'Escape') setOpen(false);
@@ -21,8 +22,8 @@ export default function LocationField({ label, value, onChange }: {
     {open && <div id={id + '-options'} role="listbox" className="jp-suggestions" aria-label={label + ' suggestions'}>
       {suggestions.length ? suggestions.map(location => <button key={location.id} type="button" role="option"
         aria-selected={location.id === value.id} onClick={() => { onChange({ id: location.id, text: location.name }); setOpen(false); }}>
-        <strong>{location.name}</strong><small>{location.subtitle}</small>
-      </button>) : <p>No supported city found. Select a curated Texas location; arbitrary addresses are not resolved.</p>}
+        <strong>{location.name}</strong><small>Texas</small>
+      </button>) : <p>No supported city found. Choose a Texas city from this list.</p>}
     </div>}
   </div>;
 }

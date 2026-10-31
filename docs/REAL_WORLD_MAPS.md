@@ -1,5 +1,7 @@
 # Cruze FuelSense: map integration and chat handoff
 
+> Current main combines the partner’s connected/map-first/branding work with the real-map branch. See [the final report](../FINAL_INTEGRATION_REPORT.md) for the current architecture, 13 verified stops, validation, and deployment limits. Earlier notes below retain the prior map-branch handoff.
+
 Updated October 31, 2026. Read this first when continuing in a new chat. This records facts and user requirements; it does not authorize unrelated changes, merging into main or deployment.
 
 ## Repository and branch

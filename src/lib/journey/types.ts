@@ -15,6 +15,11 @@ export interface JourneyPreferences {
 }
 export interface JourneyRoute {
   id: string;
+  offsetMiles?: number;
+  fullDistanceMiles?: number;
+  sourceRoute?: JourneyRoute;
+  routingStationId?: string;
+  routingStationDistanceMiles?: number;
   origin: JourneyLocation;
   destination: JourneyLocation;
   coordinates: Coordinate[];
@@ -22,8 +27,8 @@ export interface JourneyRoute {
   distanceMiles: number;
   durationSeconds: number;
   cumulativeMiles: number[];
-  provider: 'cached-osrm';
-  provenance: 'cached-road' | 'cached-road-with-modeled-access';
+  provider: 'cached-osrm' | 'osrm';
+  provenance: 'cached-road' | 'cached-road-with-modeled-access' | 'routed-road';
   attribution: string;
 }
 export interface RouteProvider {
@@ -72,9 +77,11 @@ export interface JourneyLeg {
 export interface FuelStop {
   station: JourneyStation;
   leg: JourneyLeg;
-  refillTargetPercent: 100;
+  refillTargetPercent: number;
 }
 export interface JourneyPlan {
+  refillPolicy?: 'full' | 'route-needed';
+  planningMpg?: number;
   baseRoute: JourneyRoute;
   id: string;
   route: JourneyRoute;
@@ -134,6 +141,9 @@ export interface JourneyDiagnostic {
 }
 export interface DiagnosticsAdapter { evaluate(telemetry: VehicleTelemetry): JourneyDiagnostic[] }
 export interface JourneyIntelligenceContext {
+  proposals?: JourneyPlan[];
+  efficiency?: import('../intelligence/types').EfficiencyFinding | null;
+  connectedJourneys?: { originId: string; destinationId: string; elapsedSeconds: number }[];
   plan: JourneyPlan;
   alternatives: JourneyPlan[];
   frame: SimulationFrame;
@@ -142,6 +152,11 @@ export interface JourneyIntelligenceContext {
   amenities: Amenity[];
 }
 export interface JourneyInsight {
+  strategy?: 'refuel' | 'evaluate-first' | 'combine-break' | 'monitor' | 'seek-assistance';
+  model?: string;
+  analyzedAt?: string;
+  telemetryTimestamp?: string;
+  evidence?: string[];
   priority: 'critical' | 'high' | 'medium' | 'low';
   source: 'gemma4' | 'fallback';
   title: string;

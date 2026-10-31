@@ -1,4 +1,6 @@
-# Cruze FuelSense
+# Cruze Journey
+
+Current main is the integrated map-first driver experience with shared read-only telemetry, MapLibre 3D mapping, sourced truck stops, explicit refueling, real road rerouting and optional server-side Gemma. See [FINAL_INTEGRATION_REPORT.md](FINAL_INTEGRATION_REPORT.md) for the final branch audit, checks and deployment limits. Earlier milestone notes below describe the implementation history.
 
 Drive Smarter. Further.
 

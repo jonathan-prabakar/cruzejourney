@@ -28,7 +28,7 @@ describe('verified truck-stop integration in the journey planner', () => {
     const planning = calculateJourneyPlan({ route: buildCuratedRoute('san-antonio', 'austin'), preferences: DEFAULT_PREFERENCES });
     expect(planning.requested.feasible).toBe(true);
     expect(planning.requested.fuelStops).toHaveLength(1);
-    expect(planning.requested.fuelStops[0].station.id).toMatch(/^loves-/);
+    expect(planning.requested.fuelStops[0].station.isSynthetic).toBe(false);
     expect(planning.requested.arrivalFuelPercent).toBeGreaterThanOrEqual(10);
     expect(planning.amenities).toEqual([]);
   });

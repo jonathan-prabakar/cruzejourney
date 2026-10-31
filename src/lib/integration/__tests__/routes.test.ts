@@ -50,7 +50,7 @@ describe("selectable synthetic destinations", () => {
       }
     },
   );
-  it("never shares scenario timestamps and uses only verified Love's truck-stop IDs", () => {
+  it("never shares scenario timestamps and uses only verified truck-stop IDs", () => {
     const timestamps = routeIds.flatMap((id) =>
       demoRoutes[id].dataset.records.map((r) => r.timestamp),
     );
@@ -58,7 +58,7 @@ describe("selectable synthetic destinations", () => {
     const stations = routeIds.flatMap((id) =>
       demoRoutes[id].stations.map((s) => s.id),
     );
-    expect(stations.every(id => id.startsWith("loves-"))).toBe(true);
+    expect(stations.every(id => /^(loves-\d+|ta-0232)$/.test(id))).toBe(true);
   });
   it("reconstructs the selected route on the server and rejects unknown destinations", async () => {
     vi.stubEnv("GEMINI_API_KEY", "");

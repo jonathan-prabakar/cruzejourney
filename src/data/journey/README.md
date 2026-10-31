@@ -9,3 +9,8 @@ Retrieved 2026-10-31 from the [public OSRM routing endpoint](https://router.proj
 Optional refresh: node scripts/refresh-journey-routes.mjs. This makes two public route requests for curated coordinates, with 30-second deadlines; runtime planning never requires a routing service. Do not run it repeatedly. Failed refreshes preserve the existing cache. Re-run tests/review geometry after refreshing.
 
 These are driving-profile route estimates, not real-time traffic, commercial-truck clearance or access validation. Station identities, route positions, fuel prices, availability, amenities and additional access loops are fictional and authored separately. Generated access loops are explicitly modeled and must not be mistaken for verified service roads.
+
+
+## Fictional truck stops
+
+truck-stations.json adds four deterministic fictional diesel stations to the original M3 fixture. Axis miles locate them on supported cached route geometry in places.ts; every route catalog includes generated latitude/longitude, price, amenities, truckAccess=assumed-demo and modeled detour miles. Availability and truck access are demonstration assumptions, not real station or truck-clearance verification. No mapping, places or fuel-price API is called.

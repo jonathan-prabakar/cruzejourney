@@ -12,7 +12,7 @@ export function mandatoryInsights(context: PreparedContext, approvedStationId?: 
   const stopFirst = context.coolantStatus === 'critical' ||
     context.diagnosticFindings.some(f => context.activeCodes.includes(f.code) && f.severity === 'critical');
   if (fuel.status.fuelStatus === 'LOW' || fuel.status.fuelStatus === 'CRITICAL' || fuel.status.routeSafety === 'INSUFFICIENT_RANGE') {
-    const selected = stopFirst ? null : approvedStationId === undefined ? fuel.recommendation.station :
+    const selected = stopFirst ? null : approvedStationId === undefined ? (context.eligibleStations.find(s => s.station.id === fuel.recommendation.station?.id)?.station ?? context.eligibleStations[0]?.station ?? null) :
       context.eligibleStations.find(s => s.station.id === approvedStationId)?.station ?? null;
     add({
       id: 'safety-fuel', category: 'fuel',

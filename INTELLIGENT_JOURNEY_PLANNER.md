@@ -1,8 +1,12 @@
 # Intelligent Journey Planner — Milestone 5A
 
-A functional, offline-capable journey planner and route-aware simulator is available at **/journey**, linked by **Plan journey** from the existing cockpit. The feature preserves the dark automotive design, local brand assets and existing dashboard. Its separate layout contains planning controls, a route/review area, vehicle intelligence, and live simulation instruments.
+> Current final integration (2026-10-31): see [FINAL_INTEGRATION_REPORT.md](FINAL_INTEGRATION_REPORT.md). The application uses the unified map-first home, MapLibre 3D roads, operator-sourced truck stops and the shared vehicle session. Historical feature-branch examples and recorded live results below do not establish current deployment verification.
 
-Map integration validation: 394 unit/component tests passed, two optional live tests skipped; lint, TypeScript and Webpack production build passed. Browser/Playwright checks were not rerun because the saved localhost browser permission remains blocked. Historical browser evidence below predates the verified-station integration.
+> Current product entry is the single dashboard at /. The separate planner page is retired; see [MAP_FIRST_DASHBOARD.md](MAP_FIRST_DASHBOARD.md) for the latest interface and verification. Earlier milestone history is retained below.
+
+> The current read-only driver workflow and provider architecture are documented in [CONNECTED_VEHICLE_EXPERIENCE.md](CONNECTED_VEHICLE_EXPERIENCE.md). This document also retains the earlier milestone/activation history.
+
+A functional, offline-capable journey planner and route-aware simulator is available at **/journey**, linked by **Plan journey** from the existing cockpit. The feature preserves the dark automotive design, local brand assets and existing dashboard. Its separate layout contains planning controls, a route/review area, vehicle intelligence, and live simulation instruments.
 
 ## Branch and integration boundary
 
@@ -10,7 +14,7 @@ This feature was created in a separate worktree from **origin/main at 98b6b11**,
 
 The existing M2/M3 modules, datasets, hooks and their tests were reused **unchanged** from origin/feature/m3-fuel-intelligence (0e7abf084b85462cfb6c4b36ec31204ff049affa, including the M2 foundation). They are not rewritten implementations. The journey simulation wraps the original M2 TelemetryProvider. Fuel planning calls the original M3 calculateFuelRange/assessStationReachability/calculateFuelIntelligence.
 
-The planner is now integrated with M1–M4/Gemma and the real-world MapLibre branch. The cockpit retains its telemetry, fuel, diagnostic and server-side Gemma wiring. Both screens use the verified truck-stop source in `src/data/verified-truck-stops.ts`; the retired fictional fuel-station loader is not restored. The planner provides an explicit typed adapter and existing-core bridge; its page continues to use deterministic fallback until the journey-specific server adapter is connected. No additional SDK/client was introduced.
+The planner is now merged with the completed M1–M4/Gemma integration from main (2bc7709). The cockpit retains its telemetry, fuel, diagnostic and server-side Gemma wiring. The planner provides an explicit typed adapter and existing-core bridge; its page now connects the existing-core bridge and trusted M4 adapter through /api/intelligence/journey, with deterministic fallback when configuration or inference is unavailable. No additional SDK/client was introduced.
 
 ## Supported locations and routes
 
@@ -45,7 +49,7 @@ No arbitrary-address routing, live geocoder or alternative highway optimization 
 | src/lib/journey/types.ts | Locations, routes, preferences, waypoints, plans, simulation, diagnostic/intelligence ports |
 | routes.ts | Curated location search, directed offline road routes, replacement-provider validation |
 | geometry.ts | Distance indexing, interpolation, explicit modeled access-loop insertion |
-| places.ts | Official truck-stop coordinates, projected route progress and estimated access; empty unsourced amenity coverage |
+| places.ts | Route-relative fictional station positions and fictional amenity provider |
 | planner.ts | Bounded sequential itinerary search and complete requested-plan evaluation |
 | simulation.ts | Route-specific telemetry frames, explicit purchases/dwell, original M2 playback adapter |
 | intelligence.ts | Current M3 context, fallback, validated journey decisions and paced/stale-safe adapter coordinator |
@@ -87,13 +91,13 @@ These are **modeled comparisons**, not claims of global optimization or lowest r
 
 ### Costs and duration
 
-Station prices are official Love's Auto Diesel snapshots checked 2026-10-31, not a live feed. Purchase cost is addedGallons × listedPrice, summed across simulated refills; any unknown price makes the total unknown. It excludes the unknown cost of fuel already in the starting tank and does not count fuel left in the tank as consumed.
+All station prices are fictional samples. Purchase cost is addedGallons × samplePrice, summed across refills; any unknown price makes the total unknown. It excludes the unknown cost of fuel already in the starting tank and does not count fuel left in the tank as consumed.
 
 Full refills can leave a high arrival fuel level and a substantial purchase cost. They are a transparent demo policy, not an economical purchase-volume optimizer.
 
 Duration includes cached modeled road driving time, access distance at a modeled 20 MPH, and simulated dwell. Fuel dwell is two minutes plus purchase volume at a modeled 12 gallons/minute; restaurant/restroom/coffee/convenience dwell is 20/5/7/5 simulated minutes. These are simulation assumptions, not business walking times or observed station service times.
 
-The default full-corridor example uses 17% fuel and an automatic stop preference. It selects a reachable verified Love's stop and explicitly models a full refill. Distances, access, duration, consumption and arrival fuel are recalculated from the selected source records. Coverage is limited: a preference for more stops than the verified data supports produces a feasible alternative explanation, and unsupported corridor segments contain no invented stations. Range/arrival estimates are not guarantees.
+Initial full-corridor example: 17% fuel, automatic stop preference. The default plan includes one fictional Guadalupe Demo Truck Stop refill, about **85.1 total miles**, about **127 modeled minutes**, about **11.3 gallons consumed**, and about **93.7% estimated arrival fuel**. Values are calculated, not hardcoded selections. Future refreshed road data may change them. Range/arrival estimates are not guarantees.
 
 ## Stop editing and comparison
 
@@ -111,13 +115,13 @@ After an edit, distance, geometry, duration, fuel consumption, refills, cost and
 
 Pause before editing. Editing an itinerary returns the simulation to review/start; it does not splice a new itinerary into a partially completed fuel history.
 
-## Verified stations and amenity coverage
+## Fictional stations and amenities
 
-The station adapter uses Love's records with operator-listed truck parking, DEF lanes, diesel, coordinates and dated prices. Only the selected Austin-corridor records within a bounded 20-mile offset of the chosen road route are considered. Other map journeys retain their own verified candidate lists.
+PlacesProvider supplies explicitly **fictional** restaurants, restrooms, coffee counters and convenience stores near the demo stations. Preferences influence the stop comparison and which amenity cards appear; they do not silently add a meal break.
 
-Nearby restaurants, coffee counters, convenience stores and their access routes have not been sourced. The default PlacesProvider returns no amenities and the UI explains the coverage gap. Synthetic station and amenity inputs remain under `__tests__` to exercise multi-stop planning, unknown prices, editing and simulation without shipping fictional businesses.
+Names, station identities, prices, availability and amenity locations are all demo data. Ratings, hours and walking times are null and displayed as unavailable. No real business is fabricated. A selected amenity becomes a waypoint and must pass full fuel feasibility recalculation.
 
-Station marker coordinates remain exactly those in the official source. Route progress is the nearest position on the road geometry; access mileage is an estimated full leave/rejoin allowance (`max(2, 1.5 + 2.6 × cross-track miles)`), not a verified entrance route. Map bounds include the actual station coordinates. Station details link to the official source and show the price-check date.
+Station route positions are normalized fictional positions along the selected road corridor. They are not verified actual station locations. Full access mileage is modeled separately, using the existing fictional M3 detours.
 
 The route map and simulator add explicit **synthetic out-and-back access loops** for selected fuel/amenity nodes. These small loops are illustrative geometry, not verified service roads. Their entire access distance is conservatively charged before the stop, matching M3 semantics. The map labels the mixture of cached road route and modeled access. Amenity loops are additional to station access; no distance is called a measured walking time.
 
@@ -224,7 +228,7 @@ export default function ConnectedJourney() {
 }
 ```
 
-The current page deliberately supplies no adapter until that endpoint/core integration is ready. **Gemma active** appears only after an accepted successful model-backed response, never just because a key was entered. No live Gemma request was made or claimed in this task.
+The current page now supplies the server transport and trusted M4 adapter when the server key/model are configured. See GEMMA4_LIVE_INTEGRATION.md for the activation implementation and live verification. **Gemma active** appears only after an accepted successful model-backed response, never just because a key was entered. No live Gemma request was made or claimed in this task.
 
 ## Verification
 
@@ -256,13 +260,13 @@ The Codex in-app browser tool was unavailable in this environment; browser verif
 2. The reused src/lib/telemetry, src/lib/fuel, src/data/demo-telemetry.json, src/data/demo-fuel-stations.json and original telemetry hook/tests are identical to M2/M3. If the integration branch has modified versions, retain its authoritative engine fixes and adapt only the journey ports.
 3. Bring src/lib/journey, src/components/journey, src/app/journey, useJourneySimulation, route cache/license notice, tests/config and this guide. The existing cockpit needs only the Plan journey link.
 4. Reconcile package manifests/lockfile: this feature adds Vitest, React test-renderer/types and Playwright development tooling. Preserve the integration branch's SDK, app scripts and dependencies. No new runtime package is required by the planner.
-5. Wire the trusted M4 DiagnosticsAdapter and existing Gemma server through the bridge. Add compact journey facts to the core's catalog/prompt for preference/meal/full-plan reasoning; validate returned plan/station/amenity IDs.
+5. Completed in the activation branch: trusted M4 adapter, server selector reconstruction, existing-core bridge, compact journey prompt and validated plan/station/amenity choices. No second model client is used.
 6. Maintain server-side keys, authorization, route provenance and synthetic source labels. No automatic vehicle/itinerary action should execute.
 7. Preserve simulation controls and session cleanup. Editing restarts a reviewed itinerary; seeking/resetting must increment the intelligence epoch/invalidate pending requests.
 8. Run the integrated engine suite, these browser tests, typecheck, lint and production build. Verify all four scenarios, required-stop removal, unknown prices/detours and combined low-fuel/P0301 behavior.
 
 ## Limitations
 
-This is a bounded corridor demo, not commercial navigation. Arbitrary addresses, live places/prices/traffic, truck restrictions, highway alternatives, drag-and-drop route optimization and global minimum-cost purchase sizing are deferred. Truck-stop coordinates and services come from official records; prices are dated snapshots, while access loops, refills and telemetry are modeled. Current pump stock/open status is unverified. Unsourced businesses, ratings, hours and walking times are not invented. Backtracking is explicitly unsupported. All range/duration/arrival values are estimates. Full tank refills are intentional and may be economically excessive.
+This is a bounded corridor demo, not commercial navigation. Arbitrary addresses, live places/prices/traffic, truck restrictions, highway alternatives, drag-and-drop route optimization and global minimum-cost purchase sizing are deferred. Detours/access loops, businesses, amenities, prices, availability and telemetry are modeled/fictional. Ratings/hours/walking time are not invented. Backtracking is explicitly unsupported. All range/duration/arrival values are estimates. Full tank refills are intentional and may be economically excessive.
 
-The cockpit uses the merged diagnostics engine and existing Gemma server. The planner still requires the journey-specific server adapter and trusted diagnostics port to enable those capabilities there; deterministic fallback is its shipped default. The existing development dependency audit findings remain outside this feature's functional scope; no audit success is claimed for the full development toolchain.
+The cockpit uses the merged diagnostics engine and existing Gemma server. The planner now connects those capabilities through its trusted server adapter. Deterministic fallback remains active without a configured key or accepted inference. The existing development dependency audit findings remain outside this feature's functional scope; no audit success is claimed for the full development toolchain.

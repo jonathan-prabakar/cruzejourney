@@ -16,7 +16,7 @@ export type VerifiedTruckStop = Omit<
   sourceUrl: string;
   priceVerifiedAt: string;
   truckParkingSpaces: number;
-  defLanes: number;
+  defLanes?: number;
   routeIds: readonly ("austin" | "dallas" | "houston" | "el-paso")[];
 };
 
@@ -51,6 +51,15 @@ const stop = (
 });
 
 export const verifiedTruckStops: readonly VerifiedTruckStop[] = [
+  {
+    id: "ta-0232", name: "TA New Braunfels #0232",
+    address: "4817 I-35 North, New Braunfels, TX 78130-7185",
+    latitude: 29.7489, longitude: -98.0579,
+    fuelTypes: ["diesel"], pricePerGallon: 6.059, priceSource: "verified",
+    priceVerifiedAt: "2026-10-31", truckAccess: "yes", truckParkingSpaces: 220,
+    sourceUrl: "https://www.ta-petro.com/location/tx/ta-new-braunfels/",
+    isAvailable: true, isSynthetic: false, routeIds: ["austin", "dallas"],
+  },
   stop("960", "san-antonio", "San Antonio", "9530 Southton Rd", 29.324303, -98.432278, 5.68, 70, 8, ["austin", "dallas", "houston", "el-paso"]),
   stop("242", "san-antonio", "San Antonio", "11361 S I-35", 29.31101, -98.617826, 6.14, 91, 6, ["austin"]),
   stop("719", "troy", "Troy", "1610 Cotton Gin Rd", 31.191227, -97.312105, 5.82, 184, 9, ["dallas"]),
