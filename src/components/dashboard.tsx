@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import {
   ArrowRight,
   ArrowUpRight,
@@ -172,6 +173,7 @@ export default function Dashboard() {
           </div>
         </div>
         <div className="hud-session">
+          <Link href="/journey" className="outline-button">Plan journey</Link>
           <span className="demo-label">
             <i /> SYNTHETIC REPLAY
           </span>

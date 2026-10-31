@@ -6,3 +6,6 @@ dist/
 .env*
 !.env.example
 .impeccable/review/
+test-results/
+playwright-report/
+artifacts/
