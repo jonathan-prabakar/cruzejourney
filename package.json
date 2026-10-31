@@ -7,13 +7,16 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "build": "tsc -p tsconfig.build.json"
+    "build": "tsc -p tsconfig.build.json",
+    "intelligence:live": "RUN_GEMMA_LIVE=1 vitest run src/lib/intelligence/__tests__/live.test.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.32.0",
     "react": "^19.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.6",
     "@types/react": "^19.0.0",
     "@types/react-test-renderer": "^19.0.0",
     "eslint": "^10.14.0",
