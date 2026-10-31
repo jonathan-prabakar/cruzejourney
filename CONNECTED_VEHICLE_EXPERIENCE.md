@@ -44,7 +44,7 @@ The connected UI sends only a bounded ordered list of origin ID, destination ID 
 
 The existing Gemma transport, orchestrator, evidence catalog, strict decision validation, safe rendering, mandatory warnings and fallback remain in use. Current route, destination, remaining distance, fuel/range, feasible stops, diagnostics, progress and available efficiency findings reach the same core. Requests are event-driven and paced; animation ticks do not become independent model calls. Seek/reset and route changes invalidate pending advice and protect against stale completions.
 
-The key remains server-only in the existing ignored .env.local. A successful inference is required before Gemma 4 active appears. Missing key, invalid output, quota, timeout and API errors retain deterministic advice. Automated browser tests mock inference; they do not consume the local live key. Prior activation verified a real connectivity request and vehicle assessment; later live browser verification was rate limited. No new live model success is claimed by this change.
+The key remains server-only in the existing ignored .env.local. A successful inference is required before Gemma 4 active appears. Missing key, invalid output, quota, timeout and API errors retain deterministic advice. Automated browser tests mock inference; they do not consume the local live key. Prior activation verified connectivity and a vehicle assessment. On 2026-10-31 the explicit live browser check also passed against this connected experience: a real server Gemma response for the low-fuel/P0301 scenario passed validation, reached the panel and activated its Gemma 4 badge. No model response was mocked in that check.
 
 ## Diagnostics and efficiency
 
@@ -62,7 +62,7 @@ M5B is not merged. VehicleEfficiencyAdapter provides a typed current-reading/his
 
 Verification commands: npm test, npm run typecheck, npm run lint, npm run build, npm run test:e2e.
 
-Recorded checks: **388 unit tests passed**; **8 repeatable browser tests passed**. Two live unit checks and one live browser check remain explicit opt-ins. TypeScript, ESLint and production build pass. Browser coverage includes desktop/mobile layout, absence of sensor controls, short-route zero purchases, invalid inputs, swapping, movement/consumption/pause, preservation across route/navigation, refueling explanations, historical reset and mocked Gemma response/retry/staleness. Screenshots are in ignored artifacts/connected-vehicle-*.png.
+Recorded checks: **388 unit tests passed**; **8 repeatable browser tests passed**. Two live unit checks and one live browser check remain explicit opt-ins. The separate npm run intelligence:live:browser command passed its real end-to-end scenario (14.6 seconds). TypeScript, ESLint and production build pass. Browser coverage includes desktop/mobile layout, absence of sensor controls, short-route zero purchases, invalid inputs, swapping, movement/consumption/pause, preservation across route/navigation, refueling explanations, historical reset and mocked Gemma response/retry/staleness. Screenshots are in ignored artifacts/connected-vehicle-*.png.
 
 ## Limitations
 

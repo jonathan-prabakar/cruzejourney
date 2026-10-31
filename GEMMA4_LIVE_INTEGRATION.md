@@ -59,3 +59,8 @@ The live browser check exposed the wildcard-bind origin issue, now fixed with te
 Automated checks: 378 unit tests and 10 repeatable browser tests passed; two live unit checks and one live browser check are opt-in and skipped during ordinary suites. TypeScript, ESLint and production Next.js build passed. Security checks verified ignored owner-only .env.local, blank tracked template, no actual credential in the Git diff or browser assets. See the current execution report for any later changes to these results. Ordinary tests use mocked inference; explicit live checks never substitute mocked model responses. The live test diagnoses only bounded response-format/constraint metadata and static errors, never raw SDK errors, credentials or model text.
 
 See ENVIRONMENT_SETUP.md for run commands, key setup and deployment troubleshooting.
+
+
+## Connected experience live verification — 2026-10-31
+
+The subsequent connected-vehicle branch passed npm run intelligence:live:browser using the actual local server key and canonical route-history selectors. A real combined low-fuel/P0301 response passed both validators and displayed Gemma 4 Active in the browser. This supersedes the earlier browser verification blocker above; quota/invalid-output fallback remains supported. Screenshot: ignored artifacts/gemma4-live-combined-journey.png. See CONNECTED_VEHICLE_EXPERIENCE.md for the current UI/provider design.
